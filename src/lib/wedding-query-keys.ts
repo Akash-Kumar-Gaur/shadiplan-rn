@@ -15,7 +15,9 @@ export const weddingQueryKeys = {
   weddingSongs: (weddingId: string) => ["wedding-songs", weddingId] as const,
   outfitPlans: (weddingId: string) => ["outfit-plans", weddingId] as const,
   gifts: (weddingId: string) => ["gifts", weddingId] as const,
-  photoAlbum: (weddingId: string) => ["photo-album", weddingId] as const,
+  photoAlbums: (weddingId: string) => ["photo-albums", weddingId] as const,
+  /** @deprecated use photoAlbums */
+  photoAlbum: (weddingId: string) => ["photo-albums", weddingId] as const,
   photoUploads: (albumId: string) => ["photo-uploads", albumId] as const,
   emergencyContacts: (weddingId: string) => ["emergency-contacts", weddingId] as const,
 };
