@@ -1,0 +1,21 @@
+export const weddingQueryKeys = {
+  meta: (userId: string) => ["wedding-meta", userId] as const,
+  vendors: (weddingId: string) => ["vendors", weddingId] as const,
+  guestGroups: (weddingId: string) => ["guest-groups", weddingId] as const,
+  guests: (weddingId: string) => ["guests", weddingId] as const,
+  budgetCategories: (weddingId: string) => ["budget-categories", weddingId] as const,
+  transactions: (weddingId: string) => ["transactions", weddingId] as const,
+  planningTasks: (weddingId: string) => ["planning-tasks", weddingId] as const,
+  timelineEvents: (weddingId: string) => ["timeline-events", weddingId] as const,
+  pendingSuggestions: (weddingId: string) => ["pending-suggestions", weddingId] as const,
+  invite: (weddingId: string, guestId?: string, groupId?: string) =>
+    ["invite", weddingId, guestId ?? null, groupId ?? null] as const,
+  collaborators: (weddingId: string) => ["collaborators", weddingId] as const,
+  eventSongs: (timelineEventId: string) => ["event-songs", timelineEventId] as const,
+  weddingSongs: (weddingId: string) => ["wedding-songs", weddingId] as const,
+  outfitPlans: (weddingId: string) => ["outfit-plans", weddingId] as const,
+  gifts: (weddingId: string) => ["gifts", weddingId] as const,
+  photoAlbum: (weddingId: string) => ["photo-album", weddingId] as const,
+  photoUploads: (albumId: string) => ["photo-uploads", albumId] as const,
+  emergencyContacts: (weddingId: string) => ["emergency-contacts", weddingId] as const,
+};

@@ -1,25 +1,78 @@
 {
   "expo": {
-    "name": "shadiplan-mobile",
+    "name": "ShadiPlan",
     "slug": "shadiplan-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#6B2C1F"
+    },
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "package": "in.redevolve.shadiplan",
+      "versionCode": 1,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FBF7F0"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-splash-screen",
+      "@react-native-community/datetimepicker",
+      "@lottiefiles/dotlottie-react-native/plugin",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow ShadiPlan to access your contacts to add guests quickly."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#6B2C1F",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableBundleCompression": true
+          }
+        }
+      ]
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/f790462d-c3a1-4a1b-8c9e-7cbd80519f15"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f790462d-c3a1-4a1b-8c9e-7cbd80519f15"
+      }
     }
   }
 }
