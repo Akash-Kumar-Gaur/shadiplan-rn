@@ -1,13 +1,13 @@
 import { StyleSheet, Text, View } from "react-native";
 import { AppPressable } from "./AppPressable";
-import { SheetPicker } from "./SheetPicker";
+import { AppSelect } from "./AppSelect";
 import {
   HOURS_12,
   parseTime12Parts,
   toTime24,
   type TimePeriod,
 } from "../lib/time-utils";
-import { colors, fonts, radius } from "../theme/tokens";
+import { colors, fonts } from "../theme/tokens";
 
 type TimePickerProps = {
   value: string;
@@ -31,24 +31,22 @@ export function TimePicker({
 
   return (
     <View style={styles.row}>
-      <View style={styles.hourWrap}>
-        <SheetPicker
-          selectedValue={String(hour12)}
-          onValueChange={(v) => emit(Number(v), minute, period)}
-          items={HOURS_12.map((h) => ({ label: String(h), value: String(h) }))}
-        />
-      </View>
+      <AppSelect
+        containerStyle={styles.hourWrap}
+        value={String(hour12)}
+        onSelect={(v) => emit(Number(v), minute, period)}
+        options={HOURS_12.map((h) => ({ label: String(h), value: String(h) }))}
+      />
 
-      <View style={styles.minuteWrap}>
-        <SheetPicker
-          selectedValue={minute}
-          onValueChange={(v) => emit(hour12, v, period)}
-          items={[
-            { label: ":00", value: "00" },
-            { label: ":30", value: "30" },
-          ]}
-        />
-      </View>
+      <AppSelect
+        containerStyle={styles.minuteWrap}
+        value={minute}
+        onSelect={(v) => emit(hour12, v, period)}
+        options={[
+          { label: ":00", value: "00" },
+          { label: ":30", value: "30" },
+        ]}
+      />
 
       <View style={styles.periodWrap}>
         {(["AM", "PM"] as const).map((p) => (
@@ -70,25 +68,29 @@ export function TimePicker({
 const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 8,
   },
   hourWrap: {
     flex: 1,
+    marginBottom: 0,
   },
   minuteWrap: {
-    width: 88,
+    width: 100,
+    marginBottom: 0,
   },
   periodWrap: {
     flexDirection: "row",
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.sm,
+    borderRadius: 12,
     overflow: "hidden",
+    height: 48,
   },
   periodBtn: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    height: 48,
+    justifyContent: "center",
     backgroundColor: "#fff",
   },
   periodBtnActive: {

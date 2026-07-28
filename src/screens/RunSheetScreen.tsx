@@ -3,10 +3,11 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Printer, Share2 } from "lucide-react-native";
 import { useMemo, useRef, useState } from "react";
-import { Alert, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { captureRef } from "react-native-view-shot";
 import { AppPressable } from "../components/AppPressable";
+import { showAppAlert } from "../components/ConfirmSheet";
 import { ScreenEmpty } from "../components/ScreenEmpty";
 import { ScreenLoader } from "../components/ScreenLoader";
 import { StackScreenHeader } from "../components/StackScreenHeader";
@@ -90,10 +91,10 @@ export function RunSheetScreen() {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf" });
       } else {
-        Alert.alert("PDF ready", uri);
+        showAppAlert("PDF ready", uri);
       }
     } catch (err) {
-      Alert.alert("Export failed", err instanceof Error ? err.message : "Try again");
+      showAppAlert("Export failed", err instanceof Error ? err.message : "Try again");
     }
   };
 

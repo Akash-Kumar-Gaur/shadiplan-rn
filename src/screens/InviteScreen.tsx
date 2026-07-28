@@ -4,7 +4,6 @@ import { ArrowLeft, FileDown, Share2 } from "lucide-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Dimensions,
   ScrollView,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { showAppAlert } from "../components/ConfirmSheet";
 import { captureRef } from "react-native-view-shot";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -185,7 +185,7 @@ export function InviteScreen({ navigation, route }: Props) {
         });
         const available = await Sharing.isAvailableAsync();
         if (!available) {
-          Alert.alert("Sharing unavailable", "Sharing is not available on this device.");
+          showAppAlert("Sharing unavailable", "Sharing is not available on this device.");
           return;
         }
         await Sharing.shareAsync(uri, {
@@ -204,7 +204,7 @@ export function InviteScreen({ navigation, route }: Props) {
         const { uri } = await Print.printToFileAsync({ html });
         const available = await Sharing.isAvailableAsync();
         if (!available) {
-          Alert.alert("PDF ready", "PDF was created but sharing is unavailable on this device.");
+          showAppAlert("PDF ready", "PDF was created but sharing is unavailable on this device.");
           return;
         }
         await Sharing.shareAsync(uri, {
@@ -214,7 +214,7 @@ export function InviteScreen({ navigation, route }: Props) {
         });
       }
     } catch (err) {
-      Alert.alert("Export failed", err instanceof Error ? err.message : "Could not export invite");
+      showAppAlert("Export failed", err instanceof Error ? err.message : "Could not export invite");
     } finally {
       setExporting(false);
     }

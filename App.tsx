@@ -1,5 +1,5 @@
 import "./global.css";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { useFonts } from "expo-font";
@@ -16,11 +16,15 @@ import {
   Inter_500Medium,
   Inter_600SemiBold,
 } from "@expo-google-fonts/inter";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/lib/auth";
 import { queryClient } from "./src/lib/query-client";
+import { shouldShowIntro } from "./src/lib/intro-storage";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { WeddingLoader } from "./src/components/WeddingLoader";
+import { AmountsHiddenProvider } from "./src/components/AmountText";
+import { ConfirmProvider } from "./src/components/ConfirmSheet";
+import { IntroCarousel } from "./src/screens/IntroCarousel";
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   // Splash may already be hidden on fast refresh.
@@ -28,13 +32,34 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 function AppContent() {
   const { status } = useAuth();
+  const [introReady, setIntroReady] = useState(false);
+  const [showIntro, setShowIntro] = useState(false);
 
   useEffect(() => {
-    void SplashScreen.hideAsync();
+    let cancelled = false;
+    void (async () => {
+      try {
+        const show = await shouldShowIntro();
+        if (!cancelled) setShowIntro(show);
+      } finally {
+        if (!cancelled) {
+          setIntroReady(true);
+          void SplashScreen.hideAsync();
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  if (status === "loading") {
+  if (status === "loading" || !introReady) {
     return <WeddingLoader />;
+  }
+
+  // First launch only — before Login.
+  if (showIntro && status === "unauthenticated") {
+    return <IntroCarousel onDone={() => setShowIntro(false)} />;
   }
 
   return <RootNavigator />;
@@ -56,16 +81,20 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <BottomSheetModalProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <QueryClientProvider client={queryClient}>
-          <SafeAreaProvider>
-            <AuthProvider>
-              <AppContent />
-              <StatusBar style="auto" />
-            </AuthProvider>
-          </SafeAreaProvider>
+          <AuthProvider>
+            <AmountsHiddenProvider>
+              <ConfirmProvider>
+                <BottomSheetModalProvider>
+                  <AppContent />
+                  <StatusBar style="auto" />
+                </BottomSheetModalProvider>
+              </ConfirmProvider>
+            </AmountsHiddenProvider>
+          </AuthProvider>
         </QueryClientProvider>
-      </BottomSheetModalProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

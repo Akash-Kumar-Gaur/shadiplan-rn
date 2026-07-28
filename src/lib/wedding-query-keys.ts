@@ -20,4 +20,5 @@ export const weddingQueryKeys = {
   photoAlbum: (weddingId: string) => ["photo-albums", weddingId] as const,
   photoUploads: (albumId: string) => ["photo-uploads", albumId] as const,
   emergencyContacts: (weddingId: string) => ["emergency-contacts", weddingId] as const,
+  vendorCandidates: (weddingId: string) => ["vendor-candidates", weddingId] as const,
 };

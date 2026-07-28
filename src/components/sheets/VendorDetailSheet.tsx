@@ -1,7 +1,7 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Check } from "lucide-react-native";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { Banknote, Check, Plus } from "lucide-react-native";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import type {
   BudgetCategory,
@@ -10,15 +10,18 @@ import type {
   VendorStatus
 } from "../../types/wedding";
 import { VENDOR_CATEGORIES } from "../../types/wedding";
-import { formatDate, formatINR, shortDate } from "../../lib/format";
+import { formatDate, shortDate } from "../../lib/format";
+import { useFormDirty } from "../../hooks/use-form-dirty";
 import {
   useDeleteVendor,
   useMarkVendorPaid,
   useUpdateVendor
 } from "../../hooks/use-vendor-guest-mutations";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../AppBottomSheet";
+import { AmountText } from "../AmountText";
+import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
-import { SheetPicker } from "../SheetPicker";
+import { AppSelect } from "../AppSelect";
+import { AppTextInput } from "../AppTextInput";
 import { colors, fonts, radius } from "../../theme/tokens";
 
 type Props = {
@@ -26,6 +29,7 @@ type Props = {
   weddingId: string | undefined;
   budgetCategories: BudgetCategory[];
   onClose: () => void;
+  onAddPayment?: () => void;
 };
 
 function parseDueDate(value: string | null): Date | null {
@@ -35,7 +39,7 @@ function parseDueDate(value: string | null): Date | null {
 }
 
 export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function VendorDetailSheet(
-  { vendor, weddingId, budgetCategories, onClose },
+  { vendor, weddingId, budgetCategories, onClose, onAddPayment },
   ref,
 ) {
   const innerRef = useRef<BottomSheetModal>(null);
@@ -73,6 +77,38 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
     setError(null);
     setShowDatePicker(false);
   }, [vendor]);
+
+  const formValues = useMemo(
+    () => ({
+      name,
+      category,
+      contactName,
+      phone,
+      totalCost,
+      advancePaid,
+      dueDate,
+      status,
+      notes,
+    }),
+    [name, category, contactName, phone, totalCost, advancePaid, dueDate, status, notes],
+  );
+
+  const baseline = useMemo(
+    () => ({
+      name: vendor?.name ?? "",
+      category: vendor?.category ?? ("Venue" as VendorCategory),
+      contactName: vendor?.contactName ?? "",
+      phone: vendor?.phone ?? "",
+      totalCost: vendor ? String(vendor.totalCost) : "",
+      advancePaid: vendor ? String(vendor.advancePaid) : "0",
+      dueDate: vendor ? parseDueDate(vendor.dueDate) : null,
+      status: vendor?.status ?? ("Pending" as VendorStatus),
+      notes: vendor?.notes ?? "",
+    }),
+    [vendor],
+  );
+
+  const isDirty = useFormDirty(formValues, baseline);
 
   const balance = vendor ? vendor.totalCost - vendor.advancePaid : 0;
 
@@ -147,6 +183,7 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
       ref={innerRef}
       title="Edit vendor"
       subtitle={vendor.category}
+      isDirty={isDirty}
       onDismiss={() => {
         setRemoveConfirmOpen(false);
         onClose();
@@ -154,73 +191,111 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
     >
       <View style={styles.summaryCard}>
         <View style={styles.stats}>
-          <Stat label="Total" value={formatINR(vendor.totalCost)} />
-          <Stat label="Paid" value={formatINR(vendor.advancePaid)} />
-          <Stat label="Balance" value={formatINR(balance)} />
+          <Stat label="Total" value={vendor.totalCost} />
+          <Stat label="Paid" value={vendor.advancePaid} />
+          <Stat label="Balance" value={balance} />
+        </View>
+        <Text style={styles.runningTotal}>
+          Running total:{" "}
+          <AmountText value={vendor.advancePaid} style={styles.runningTotalEm} />
+          {" of "}
+          <AmountText value={vendor.totalCost} style={styles.runningTotalEm} />
+        </Text>
+        <View style={styles.payProgressTrack}>
+          <View
+            style={[
+              styles.payProgressFill,
+              {
+                width: `${
+                  vendor.totalCost > 0
+                    ? Math.min(100, Math.round((vendor.advancePaid / vendor.totalCost) * 100))
+                    : 0
+                }%`,
+              },
+            ]}
+          />
         </View>
       </View>
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Name *</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="Vendor name"
-          placeholderTextColor={colors.textMuted}
-        />
+      <Text style={styles.sectionTitle}>Payment history</Text>
+      <View style={styles.listCard}>
+        {vendor.payments.length === 0 ? (
+          <Text style={styles.empty}>No payments yet</Text>
+        ) : (
+          vendor.payments.map((p) => (
+            <View key={p.id} style={styles.paymentRow}>
+              <View>
+                <AmountText value={p.amount} style={styles.paymentAmount} />
+                {p.note ? <Text style={styles.paymentNote}>{p.note}</Text> : null}
+              </View>
+              <Text style={styles.paymentDate}>{formatDate(p.date)}</Text>
+            </View>
+          ))
+        )}
       </View>
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Category</Text>
-        <SheetPicker
-          selectedValue={category}
-          onValueChange={setCategory}
-          items={VENDOR_CATEGORIES.map((c) => ({ label: c, value: c }))}
-        />
-      </View>
+      {onAddPayment ? (
+        <AppPressable
+          onPress={onAddPayment}
+          disabled={busy}
+          style={[formStyles.outlineBtn, { marginTop: 0, marginBottom: 16 }]}
+        >
+          <View style={styles.markPaidRow}>
+            <Plus size={16} color={colors.primary} />
+            <Text style={formStyles.outlineBtnText}>Add payment</Text>
+          </View>
+        </AppPressable>
+      ) : null}
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Contact name</Text>
-        <SheetTextInput style={formStyles.input} value={contactName} onChangeText={setContactName} />
-      </View>
+      <AppTextInput
+        label="Name *"
+        value={name}
+        onChangeText={setName}
+        placeholder="Vendor name"
+      />
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Phone</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={phone}
-          onChangeText={setPhone}
-          keyboardType="phone-pad"
-        />
-      </View>
+      <AppSelect
+        label="Category"
+        value={category}
+        onSelect={setCategory}
+        options={VENDOR_CATEGORIES.map((c) => ({ label: c, value: c }))}
+      />
+
+      <AppTextInput
+        label="Contact name"
+        value={contactName}
+        onChangeText={setContactName}
+      />
+
+      <AppTextInput
+        label="Phone"
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+      />
 
       <View style={formStyles.row2}>
-        <View style={[formStyles.field, formStyles.row2col]}>
-          <Text style={formStyles.label}>Total cost (₹) *</Text>
-          <SheetTextInput
-            style={formStyles.input}
-            value={totalCost}
-            onChangeText={setTotalCost}
-            keyboardType="numeric"
-          />
-        </View>
-        <View style={[formStyles.field, formStyles.row2col]}>
-          <Text style={formStyles.label}>Advance paid (₹)</Text>
-          <SheetTextInput
-            style={formStyles.input}
-            value={advancePaid}
-            onChangeText={setAdvancePaid}
-            keyboardType="numeric"
-          />
-        </View>
+        <AppTextInput
+          label="Total cost (₹) *"
+          value={totalCost}
+          onChangeText={setTotalCost}
+          keyboardType="numeric"
+          containerStyle={formStyles.row2col}
+        />
+        <AppTextInput
+          label="Advance paid (₹)"
+          value={advancePaid}
+          onChangeText={setAdvancePaid}
+          keyboardType="numeric"
+          containerStyle={formStyles.row2col}
+        />
       </View>
 
       <View style={formStyles.row2}>
         <View style={[formStyles.field, formStyles.row2col]}>
           <Text style={formStyles.label}>Due date</Text>
           <AppPressable style={formStyles.input} onPress={() => setShowDatePicker(true)}>
-            <Text style={{ paddingTop: 12, color: dueDate ? colors.foreground : colors.textMuted }}>
+            <Text style={{ color: dueDate ? colors.charcoal : colors.textMuted, fontSize: 15 }}>
               {dueDate ? shortDate(dueDate.toISOString().slice(0, 10)) : "Select date"}
             </Text>
           </AppPressable>
@@ -235,46 +310,25 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
             />
           ) : null}
         </View>
-        <View style={[formStyles.field, formStyles.row2col]}>
-          <Text style={formStyles.label}>Status</Text>
-          <SheetPicker
-            selectedValue={status}
-            onValueChange={setStatus}
-            items={[
-              { label: "Pending", value: "Pending" },
-              { label: "Confirmed", value: "Confirmed" },
-              { label: "Paid", value: "Paid" },
-            ]}
-          />
-        </View>
-      </View>
-
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Notes</Text>
-        <SheetTextInput
-          style={formStyles.textarea}
-          value={notes}
-          onChangeText={setNotes}
-          multiline
+        <AppSelect
+          label="Status"
+          value={status}
+          onSelect={setStatus}
+          containerStyle={formStyles.row2col}
+          options={[
+            { label: "Pending", value: "Pending" },
+            { label: "Confirmed", value: "Confirmed" },
+            { label: "Paid", value: "Paid" },
+          ]}
         />
       </View>
 
-      <Text style={styles.sectionTitle}>Payment history</Text>
-      <View style={styles.listCard}>
-        {vendor.payments.length === 0 ? (
-          <Text style={styles.empty}>No payments yet</Text>
-        ) : (
-          vendor.payments.map((p) => (
-            <View key={p.id} style={styles.paymentRow}>
-              <View>
-                <Text style={styles.paymentAmount}>{formatINR(p.amount)}</Text>
-                {p.note ? <Text style={styles.paymentNote}>{p.note}</Text> : null}
-              </View>
-              <Text style={styles.paymentDate}>{formatDate(p.date)}</Text>
-            </View>
-          ))
-        )}
-      </View>
+      <AppTextInput
+        label="Notes"
+        value={notes}
+        onChangeText={setNotes}
+        multiline
+      />
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
 
@@ -302,10 +356,20 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
           <ActivityIndicator color={colors.primary} />
         ) : (
           <View style={styles.markPaidRow}>
-            <Check size={16} color={colors.primary} />
-            <Text style={formStyles.outlineBtnText}>
-              {balance <= 0 ? "Fully paid" : `Mark as paid (${formatINR(balance)})`}
-            </Text>
+            {balance <= 0 ? (
+              <Check size={16} color={colors.primary} />
+            ) : (
+              <Banknote size={16} color={colors.primary} />
+            )}
+            {balance <= 0 ? (
+              <Text style={formStyles.outlineBtnText}>Fully paid</Text>
+            ) : (
+              <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+                <Text style={formStyles.outlineBtnText}>Mark remaining as paid (</Text>
+                <AmountText value={balance} style={formStyles.outlineBtnText} />
+                <Text style={formStyles.outlineBtnText}>)</Text>
+              </View>
+            )}
           </View>
         )}
       </AppPressable>
@@ -350,11 +414,11 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
   );
 });
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: { label: string; value: number }) {
   return (
     <View style={styles.stat}>
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
+      <AmountText value={value} style={styles.statValue} />
     </View>
   );
 }
@@ -372,6 +436,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12
 },
+  runningTotal: {
+    marginTop: 12,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.mutedForeground,
+  },
+  runningTotalEm: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: colors.foreground,
+  },
+  payProgressTrack: {
+    height: 6,
+    backgroundColor: colors.secondary,
+    borderRadius: 3,
+    marginTop: 8,
+    overflow: "hidden",
+  },
+  payProgressFill: {
+    height: "100%",
+    backgroundColor: colors.primary,
+    borderRadius: 3,
+  },
   stat: {
     flex: 1
 },

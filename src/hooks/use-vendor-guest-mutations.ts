@@ -117,6 +117,45 @@ export function useMarkVendorPaid(weddingId: string | undefined) {
   });
 }
 
+/** Record a partial (or full) vendor payment — updates vendor_payments + transactions + advance_paid. */
+export function useAddVendorPayment(weddingId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      vendor,
+      budgetCategories,
+      amount,
+      paidDate,
+      note,
+    }: {
+      vendor: Vendor;
+      budgetCategories: BudgetCategory[];
+      amount: number;
+      paidDate: string;
+      note?: string;
+    }) => {
+      if (!weddingId) throw new Error("No wedding loaded");
+      if (!amount || amount <= 0) throw new Error("Enter a valid amount");
+      const categoryId =
+        budgetCategories.find((c) => c.name === vendor.category)?.id ??
+        budgetCategories[0]?.id;
+      if (!categoryId) throw new Error("No budget category available");
+      await recordVendorPayment(weddingId, vendor, categoryId, amount, paidDate, note);
+      const newAdvance = vendor.advancePaid + amount;
+      if (newAdvance >= vendor.totalCost) {
+        await cancelVendorReminder(vendor.id);
+      }
+    },
+    onSuccess: () => {
+      if (!weddingId) return;
+      void queryClient.invalidateQueries({ queryKey: weddingQueryKeys.vendors(weddingId) });
+      void queryClient.invalidateQueries({ queryKey: weddingQueryKeys.budgetCategories(weddingId) });
+      void queryClient.invalidateQueries({ queryKey: weddingQueryKeys.transactions(weddingId) });
+    },
+  });
+}
+
 export function useCreateGuestGroup(weddingId: string | undefined) {
   const queryClient = useQueryClient();
 

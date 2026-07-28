@@ -209,6 +209,46 @@ export async function resolveUserWedding(
   return null;
 }
 
+export type CreateWeddingInput = {
+  coupleNames: string;
+  location: string;
+  startDate: string;
+  /** Primary wedding day — drives planning lead times. Defaults to startDate if omitted. */
+  date?: string;
+  endDate: string;
+  totalBudget?: number | null;
+};
+
+/** Creates a wedding owned by the signed-in user. */
+export async function createWedding(
+  ownerId: string,
+  input: CreateWeddingInput,
+): Promise<Wedding> {
+  const coupleNames = input.coupleNames.trim();
+  if (!coupleNames) throw new Error("Couple names are required");
+  const startDate = input.startDate;
+  const endDate = input.endDate;
+  const weddingDate = input.date?.trim() || startDate;
+  if (!startDate || !endDate) throw new Error("Wedding dates are required");
+
+  const { data, error } = await supabase
+    .from("weddings")
+    .insert({
+      owner_id: ownerId,
+      couple_names: coupleNames,
+      location: input.location.trim() || null,
+      start_date: startDate,
+      wedding_date: weddingDate,
+      end_date: endDate,
+      total_budget: input.totalBudget ?? null,
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return mapWedding(data as WeddingRow);
+}
+
 export async function updateWedding(
   weddingId: string,
   patch: Partial<{

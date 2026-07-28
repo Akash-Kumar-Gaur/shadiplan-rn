@@ -14,19 +14,19 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   ScrollView,
   Share,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppPressable } from "../components/AppPressable";
+import { requestAppConfirm, showAppAlert } from "../components/ConfirmSheet";
+import { AppTextInput } from "../components/AppTextInput";
 import { ScreenEmpty } from "../components/ScreenEmpty";
 import { ScreenLoader } from "../components/ScreenLoader";
 import { StackScreenHeader } from "../components/StackScreenHeader";
@@ -114,7 +114,7 @@ export function PhotoAlbumScreen() {
       setOpenGroupKey(null);
     },
     onError: (err) => {
-      Alert.alert("Could not create album", err instanceof Error ? err.message : "Try again");
+      showAppAlert("Could not create album", err instanceof Error ? err.message : "Try again");
     },
   });
 
@@ -146,7 +146,7 @@ export function PhotoAlbumScreen() {
       setSelectMode(false);
     },
     onError: (err) => {
-      Alert.alert("Transfer failed", err instanceof Error ? err.message : "Try again");
+      showAppAlert("Transfer failed", err instanceof Error ? err.message : "Try again");
     },
   });
 
@@ -156,7 +156,7 @@ export function PhotoAlbumScreen() {
   const shareLink = async (album: PhotoAlbum) => {
     const guestUrl = guestUrlFor(album);
     if (!guestUrl.startsWith("http")) {
-      Alert.alert(
+      showAppAlert(
         "Set web app URL",
         "Add EXPO_PUBLIC_WEB_APP_URL to your .env so the QR points at the guest upload page.",
       );
@@ -177,7 +177,7 @@ export function PhotoAlbumScreen() {
       );
       await sharePhotosAsZip(photos, zipName);
     } catch (err) {
-      Alert.alert("Download failed", err instanceof Error ? err.message : "Could not create zip");
+      showAppAlert("Download failed", err instanceof Error ? err.message : "Could not create zip");
     } finally {
       setDownloading(false);
     }
@@ -347,7 +347,7 @@ export function PhotoAlbumScreen() {
                     <AppPressable
                       onPress={() => {
                         if (otherAlbums.length === 0) {
-                          Alert.alert(
+                          showAppAlert(
                             "Create another album",
                             "You need a second album to move or copy photos.",
                           );
@@ -363,7 +363,7 @@ export function PhotoAlbumScreen() {
                     <AppPressable
                       onPress={() => {
                         if (otherAlbums.length === 0) {
-                          Alert.alert(
+                          showAppAlert(
                             "Create another album",
                             "You need a second album to move or copy photos.",
                           );
@@ -388,14 +388,12 @@ export function PhotoAlbumScreen() {
                       selected={selectedIds.has(upload.id)}
                       onToggleSelect={() => toggleSelected(upload.id)}
                       onDelete={() =>
-                        Alert.alert("Delete photo?", undefined, [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Delete",
-                            style: "destructive",
-                            onPress: () => deleteMutation.mutate(upload),
-                          },
-                        ])
+                        requestAppConfirm({
+                          title: "Delete photo?",
+                          confirmLabel: "Delete",
+                          destructive: true,
+                          onConfirm: () => deleteMutation.mutate(upload),
+                        })
                       }
                     />
                   ))}
@@ -454,13 +452,13 @@ export function PhotoAlbumScreen() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>New album</Text>
-            <TextInput
+            <AppTextInput
+              native
               value={newAlbumName}
               onChangeText={setNewAlbumName}
               placeholder="e.g. Haldi, Reception…"
-              placeholderTextColor={colors.mutedForeground}
-              style={styles.modalInput}
               autoFocus
+              containerStyle={{ marginBottom: 16 }}
             />
             <View style={styles.modalActions}>
               <AppPressable onPress={() => setNewAlbumOpen(false)} style={styles.modalBtn}>
@@ -882,17 +880,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.mutedForeground,
     marginBottom: 12,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontFamily: fonts.body,
-    fontSize: 15,
-    color: colors.foreground,
-    marginBottom: 16,
   },
   modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
   modalBtn: {

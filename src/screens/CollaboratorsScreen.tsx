@@ -5,18 +5,18 @@ import {
   ActivityIndicator,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppPressable } from "../components/AppPressable";
+import { AppTextInput } from "../components/AppTextInput";
 import { ScreenEmpty } from "../components/ScreenEmpty";
 import { ScreenLoader } from "../components/ScreenLoader";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
 import { fetchCollaborators, inviteCollaborator } from "../lib/wedding-api";
 import { weddingQueryKeys } from "../lib/wedding-query-keys";
-import { colors, fonts, radius, spacing } from "../theme/tokens";
+import { colors, fonts, spacing } from "../theme/tokens";
 
 export function CollaboratorsScreen() {
   const insets = useSafeAreaInsets();
@@ -96,14 +96,14 @@ export function CollaboratorsScreen() {
         ))}
 
         <View style={styles.inviteRow}>
-          <TextInput
-            style={styles.input}
+          <AppTextInput
+            native
             value={email}
             onChangeText={setEmail}
             placeholder="email@example.com"
-            placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
             keyboardType="email-address"
+            containerStyle={{ flex: 1, marginBottom: 0 }}
           />
           <AppPressable
             onPress={() => invite.mutate()}
@@ -178,23 +178,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     marginTop: 20,
-  },
-  input: {
-    flex: 1,
-    height: 44,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: 12,
-    fontFamily: fonts.body,
-    fontSize: 16,
-    color: colors.foreground,
+    alignItems: "center",
   },
   inviteBtn: {
-    height: 44,
+    height: 48,
     paddingHorizontal: 16,
-    borderRadius: radius.sm,
+    borderRadius: 12,
     backgroundColor: colors.terracottaDark,
     alignItems: "center",
     justifyContent: "center",

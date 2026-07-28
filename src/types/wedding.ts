@@ -10,6 +10,8 @@ export type VendorCategory =
 
 export type VendorStatus = "Confirmed" | "Pending" | "Paid";
 
+export type VendorCandidateStatus = "considering" | "promoted" | "rejected";
+
 export interface Vendor {
   id: string;
   name: string;
@@ -23,6 +25,37 @@ export interface Vendor {
   notes?: string;
   payments: { id: string; amount: number; date: string; note?: string }[];
 }
+
+export interface VendorCandidateFile {
+  id: string;
+  vendorCandidateId: string;
+  storagePath: string;
+  fileName?: string;
+  uploadedAt: string;
+}
+
+export interface VendorCandidate {
+  id: string;
+  weddingId: string;
+  name: string;
+  category: VendorCategory;
+  contactName?: string;
+  phone?: string;
+  proposedAmount?: number;
+  notes?: string;
+  status: VendorCandidateStatus;
+  createdAt: string;
+  files: VendorCandidateFile[];
+}
+
+export type CreateVendorCandidateInput = {
+  name: string;
+  category: VendorCategory;
+  contactName?: string;
+  phone?: string;
+  proposedAmount?: number;
+  notes?: string;
+};
 
 export type RsvpStatus = "Confirmed" | "Pending" | "Declined";
 export type MealPref = "Veg" | "Non-veg" | "Jain";

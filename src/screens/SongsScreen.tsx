@@ -2,15 +2,18 @@ import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Music, Trash2 } from "lucide-react-native";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../components/AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../components/AppBottomSheet";
 import { AppPressable } from "../components/AppPressable";
+import { requestAppConfirm } from "../components/ConfirmSheet";
+import { AppSelect } from "../components/AppSelect";
+import { AppTextInput } from "../components/AppTextInput";
 import { Fab } from "../components/Fab";
 import { ScreenEmpty } from "../components/ScreenEmpty";
 import { ScreenLoader } from "../components/ScreenLoader";
-import { SheetPicker } from "../components/SheetPicker";
 import { StackScreenHeader } from "../components/StackScreenHeader";
+import { useFormDirty } from "../hooks/use-form-dirty";
 import { useTimelineEvents } from "../hooks/use-timeline-events";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
 import {
@@ -23,7 +26,7 @@ import {
 } from "../lib/event-songs-api";
 import { formatDisplayTime } from "../lib/time-utils";
 import { weddingQueryKeys } from "../lib/wedding-query-keys";
-import { colors, fonts, radius, spacing } from "../theme/tokens";
+import { colors, fonts, spacing } from "../theme/tokens";
 
 const CUSTOM_MOMENT = "__custom__";
 
@@ -128,13 +131,13 @@ export function SongsScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StackScreenHeader title="Songs" />
       <View style={styles.searchWrap}>
-        <SheetTextInput
-          style={styles.search}
+        <AppTextInput
+          native
           value={query}
           onChangeText={setQuery}
           placeholder="Search songs, moments, events…"
-          placeholderTextColor={colors.textMuted}
           autoCorrect={false}
+          containerStyle={{ marginBottom: 0 }}
         />
       </View>
 
@@ -223,14 +226,13 @@ export function SongsScreen() {
               </AppPressable>
               <AppPressable
                 onPress={() =>
-                  Alert.alert("Remove song?", song.songName, [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Delete",
-                      style: "destructive",
-                      onPress: () => deleteMutation.mutate(song.id)
-},
-                  ])
+                  requestAppConfirm({
+                    title: "Remove song?",
+                    message: song.songName,
+                    confirmLabel: "Delete",
+                    destructive: true,
+                    onConfirm: () => deleteMutation.mutate(song.id),
+                  })
                 }
                 accessibilityLabel="Delete song"
               >
@@ -297,6 +299,42 @@ const SongFormSheet = forwardRef<
     // Only reacts to `song` identity; `events` default is only used when creating.
   }, [song]);
 
+  const formValues = useMemo(
+    () => ({
+      eventId,
+      momentPreset,
+      customMoment,
+      songName,
+      artist,
+      link,
+    }),
+    [eventId, momentPreset, customMoment, songName, artist, link],
+  );
+
+  const baseline = useMemo(() => {
+    if (song) {
+      const isPreset = (SONG_MOMENT_PRESETS as readonly string[]).includes(song.moment);
+      return {
+        eventId: song.timelineEventId,
+        momentPreset: isPreset ? song.moment : CUSTOM_MOMENT,
+        customMoment: isPreset ? "" : song.moment,
+        songName: song.songName,
+        artist: song.artist ?? "",
+        link: song.link ?? "",
+      };
+    }
+    return {
+      eventId: events[0]?.id ?? "",
+      momentPreset: SONG_MOMENT_PRESETS[0],
+      customMoment: "",
+      songName: "",
+      artist: "",
+      link: "",
+    };
+  }, [song, events]);
+
+  const isDirty = useFormDirty(formValues, baseline);
+
   const handleSubmit = async () => {
     const moment = momentPreset === CUSTOM_MOMENT ? customMoment.trim() : momentPreset.trim();
     if (!eventId) {
@@ -344,72 +382,53 @@ const SongFormSheet = forwardRef<
       ref={innerRef}
       title={isEdit ? "Edit song" : "Add song"}
       subtitle={isEdit ? undefined : "Attach to a timeline event"}
+      isDirty={isDirty}
       onDismiss={onDismiss}
     >
       {isEdit ? null : (
-        <View style={formStyles.field}>
-          <Text style={formStyles.label}>Event</Text>
-          <SheetPicker
-            selectedValue={eventId}
-            onValueChange={setEventId}
-            items={events.map((e) => ({ label: e.label, value: e.id }))}
-          />
-        </View>
+        <AppSelect
+          label="Event"
+          value={eventId}
+          onSelect={setEventId}
+          options={events.map((e) => ({ label: e.label, value: e.id }))}
+        />
       )}
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Moment</Text>
-        <SheetPicker
-          selectedValue={momentPreset}
-          onValueChange={setMomentPreset}
-          items={[
-            ...SONG_MOMENT_PRESETS.map((m) => ({ label: m, value: m })),
-            { label: "Custom…", value: CUSTOM_MOMENT },
-          ]}
-        />
-      </View>
+      <AppSelect
+        label="Moment"
+        value={momentPreset}
+        onSelect={setMomentPreset}
+        options={[
+          ...SONG_MOMENT_PRESETS.map((m) => ({ label: m, value: m })),
+          { label: "Custom…", value: CUSTOM_MOMENT },
+        ]}
+      />
       {momentPreset === CUSTOM_MOMENT ? (
-        <View style={formStyles.field}>
-          <Text style={formStyles.label}>Custom moment</Text>
-          <SheetTextInput
-            style={formStyles.input}
-            value={customMoment}
-            onChangeText={setCustomMoment}
-            placeholder="e.g. Cake cutting"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        <AppTextInput
+          label="Custom moment"
+          value={customMoment}
+          onChangeText={setCustomMoment}
+          placeholder="e.g. Cake cutting"
+        />
       ) : null}
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Song name</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={songName}
-          onChangeText={setSongName}
-          placeholder="Song title"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Artist</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={artist}
-          onChangeText={setArtist}
-          placeholder="Optional"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Link</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={link}
-          onChangeText={setLink}
-          placeholder="Spotify / YouTube (optional)"
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize="none"
-        />
-      </View>
+      <AppTextInput
+        label="Song name"
+        value={songName}
+        onChangeText={setSongName}
+        placeholder="Song title"
+      />
+      <AppTextInput
+        label="Artist"
+        value={artist}
+        onChangeText={setArtist}
+        placeholder="Optional"
+      />
+      <AppTextInput
+        label="Link"
+        value={link}
+        onChangeText={setLink}
+        placeholder="Spotify / YouTube (optional)"
+        autoCapitalize="none"
+      />
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
       <AppPressable
         onPress={() => void handleSubmit()}
@@ -429,17 +448,6 @@ const SongFormSheet = forwardRef<
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   searchWrap: { paddingHorizontal: spacing.screen, paddingTop: 12 },
-  search: {
-    height: 44,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
-    paddingHorizontal: 12,
-    fontFamily: fonts.body,
-    fontSize: 16,
-    color: colors.foreground
-},
   empty: {
     fontFamily: fonts.body,
     fontSize: 14,

@@ -1,16 +1,18 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
+import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useCreatePlanningTask } from "../../hooks/use-checklist-mutations";
 import { shortDate } from "../../lib/format";
 import {
   PLANNING_TASK_CATEGORIES,
   type PlanningTaskCategory
 } from "../../lib/planning-categories";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
-import { SheetPicker } from "../SheetPicker";
+import { AppSelect } from "../AppSelect";
+import { AppTextInput } from "../AppTextInput";
 import { colors } from "../../theme/tokens";
 
 type Props = {
@@ -58,6 +60,23 @@ export const PlanningTaskCreateSheet = forwardRef<BottomSheetModal, Props>(
       setShowDatePicker(false);
     };
 
+    const formValues = useMemo(
+      () => ({ task, category, suggestedDate, notes }),
+      [task, category, suggestedDate, notes],
+    );
+
+    const baseline = useMemo(
+      () => ({
+        task: "",
+        category: "Venue" as PlanningTaskCategory,
+        suggestedDate: defaultDate,
+        notes: "",
+      }),
+      [defaultDate],
+    );
+
+    const isDirty = useFormDirty(formValues, baseline);
+
     const handleSubmit = async () => {
       if (!task.trim()) {
         setError("Task name is required");
@@ -91,36 +110,37 @@ export const PlanningTaskCreateSheet = forwardRef<BottomSheetModal, Props>(
             ? "Something easy to forget"
             : "Add a planning task to your checklist"
         }
+        isDirty={isDirty}
         onDismiss={reset}
       >
-        <View style={formStyles.field}>
-          <Text style={formStyles.label}>Task name</Text>
-          <SheetTextInput
-            style={formStyles.input}
-            placeholder="e.g. Confirm florist delivery time"
-            value={task}
-            onChangeText={setTask}
-          />
-        </View>
+        <AppTextInput
+          label="Task name"
+          placeholder="e.g. Confirm florist delivery time"
+          value={task}
+          onChangeText={setTask}
+        />
 
         {!commonlyMissed ? (
-          <View style={formStyles.field}>
-            <Text style={formStyles.label}>Category</Text>
-            <SheetPicker
-              selectedValue={category}
-              onValueChange={setCategory}
-              items={PLANNING_TASK_CATEGORIES.map((c) => ({ label: c, value: c }))}
-            />
-          </View>
+          <AppSelect
+            label="Category"
+            value={category}
+            onSelect={setCategory}
+            options={PLANNING_TASK_CATEGORIES.map((c) => ({ label: c, value: c }))}
+          />
         ) : null}
 
         <View style={formStyles.field}>
           <Text style={formStyles.label}>Date (optional)</Text>
-          <Pressable onPress={() => setShowDatePicker(true)}>
-            <Text style={formStyles.input}>
+          <AppPressable style={formStyles.input} onPress={() => setShowDatePicker(true)}>
+            <Text
+              style={{
+                color: suggestedDate ? colors.charcoal : colors.textMuted,
+                fontSize: 15,
+              }}
+            >
               {suggestedDate ? shortDate(suggestedDate) : "Pick date"}
             </Text>
-          </Pressable>
+          </AppPressable>
           {showDatePicker ? (
             <DateTimePicker
               value={suggestedDate ? parseIsoDate(suggestedDate) : new Date()}
@@ -140,16 +160,13 @@ export const PlanningTaskCreateSheet = forwardRef<BottomSheetModal, Props>(
         </View>
 
         {!commonlyMissed ? (
-          <View style={formStyles.field}>
-            <Text style={formStyles.label}>Notes (optional)</Text>
-            <SheetTextInput
-              style={formStyles.textarea}
-              placeholder="Any extra context"
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-            />
-          </View>
+          <AppTextInput
+            label="Notes (optional)"
+            placeholder="Any extra context"
+            value={notes}
+            onChangeText={setNotes}
+            multiline
+          />
         ) : null}
 
         {error ? <Text style={formStyles.error}>{error}</Text> : null}

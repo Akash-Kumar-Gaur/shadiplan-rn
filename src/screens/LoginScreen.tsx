@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -14,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { OtpInput } from "react-native-otp-entry";
 import { DotLottie } from "@lottiefiles/dotlottie-react-native";
 import { AppPressable } from "../components/AppPressable";
+import { AppTextInput } from "../components/AppTextInput";
 import { EmblemBadge } from "../components/EmblemBadge";
 import { HeroBackdrop } from "../components/HeroBackdrop";
 import { useAuth, type AuthError } from "../lib/auth";
@@ -134,9 +134,9 @@ export function LoginScreen() {
               <Text style={styles.title}>Welcome back</Text>
               <Text style={styles.subtitle}>Log in with your email</Text>
 
-              <Text style={styles.label}>Email address</Text>
-              <TextInput
-                style={styles.input}
+              <AppTextInput
+                native
+                label="Email address"
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -144,7 +144,7 @@ export function LoginScreen() {
                 autoComplete="email"
                 autoCorrect={false}
                 placeholder="you@example.com"
-                placeholderTextColor={colors.textMuted}
+                containerStyle={{ marginTop: 24 }}
               />
               <AppPressable
                 style={[styles.button, (!emailValid || submitting) && styles.buttonDisabled]}
@@ -265,28 +265,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.mutedForeground,
   },
-  label: {
-    marginTop: 24,
-    marginBottom: 8,
-    fontFamily: fonts.bodyMedium,
-    fontSize: 14,
-    color: colors.foreground,
-  },
-  input: {
-    height: 44,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    fontFamily: fonts.body,
-    fontSize: 16,
-    color: colors.foreground,
-  },
   button: {
     marginTop: 16,
-    height: 44,
-    borderRadius: radius.sm,
+    height: 48,
+    borderRadius: 12,
     backgroundColor: colors.terracottaDark,
     alignItems: "center",
     justifyContent: "center",

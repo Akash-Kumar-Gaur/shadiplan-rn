@@ -5,6 +5,7 @@ import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppPressable } from "../components/AppPressable";
+import { AnimatedScreenTitle } from "../components/AnimatedScreenTitle";
 import { DrawerMenuButton } from "../components/DrawerMenuButton";
 import { Fab } from "../components/Fab";
 import { ScreenEmpty } from "../components/ScreenEmpty";
@@ -89,12 +90,21 @@ export function ChecklistScreen() {
   const eventsByDate = useMemo(() => groupEventsByDate(timelineEvents), [timelineEvents]);
 
   useEffect(() => {
-    if (!selectedDate && weddingDays.length) {
-      setSelectedDate(weddingDays[0]);
-    } else if (selectedDate && weddingDays.length && !weddingDays.includes(selectedDate)) {
-      setSelectedDate(weddingDays[0]);
+    if (!weddingDays.length) return;
+
+    const pickDefaultDay = () => {
+      const firstPending = weddingDays.find((date) =>
+        (eventsByDate.get(date) ?? []).some((e) => !e.done),
+      );
+      return firstPending ?? weddingDays[weddingDays.length - 1];
+    };
+
+    if (!selectedDate) {
+      setSelectedDate(pickDefaultDay());
+    } else if (!weddingDays.includes(selectedDate)) {
+      setSelectedDate(pickDefaultDay());
     }
-  }, [weddingDays, selectedDate]);
+  }, [weddingDays, selectedDate, eventsByDate]);
 
   const dayEvents = useMemo(
     () => eventsByDate.get(selectedDate) ?? [],
@@ -148,7 +158,7 @@ export function ChecklistScreen() {
     }
     if (!wedding) {
       return (
-        <ScreenEmpty description="Set up your wedding on the web app to see tasks here." />
+        <ScreenEmpty description="Finish setting up your wedding to see tasks here." />
       );
     }
 
@@ -206,7 +216,7 @@ export function ChecklistScreen() {
         <View style={styles.headerTop}>
           <View style={styles.headerText}>
             <Text style={styles.eyebrow}>ShadiPlan</Text>
-            <Text style={styles.heading}>Checklist</Text>
+            <AnimatedScreenTitle style={styles.heading}>Checklist</AnimatedScreenTitle>
           </View>
           <DrawerMenuButton />
         </View>

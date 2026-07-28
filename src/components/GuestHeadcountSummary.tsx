@@ -15,6 +15,22 @@ export function GuestHeadcountSummaryCard({ headcounts }: { headcounts: GuestHea
         <Text style={styles.muted}> · </Text>
         <Text style={styles.success}>{headcounts.confirmedHeadcount} attending</Text>
       </Text>
+      <Text style={[styles.line, styles.lineGap]}>
+        <Text style={styles.strong}>{headcounts.accommodationAll} need rooms</Text>
+        <Text style={styles.muted}> · </Text>
+        <Text style={styles.strong}>{headcounts.transportAll} need transport</Text>
+      </Text>
+      {(headcounts.accommodationConfirmed > 0 || headcounts.transportConfirmed > 0) ? (
+        <Text style={[styles.line, styles.lineGap]}>
+          <Text style={styles.success}>
+            {headcounts.accommodationConfirmed} confirmed rooms
+          </Text>
+          <Text style={styles.muted}> · </Text>
+          <Text style={styles.success}>
+            {headcounts.transportConfirmed} confirmed transport
+          </Text>
+        </Text>
+      ) : null}
       {headcounts.pendingRecords > 0 ? (
         <Text style={styles.pending}>{headcounts.pendingRecords} RSVP pending</Text>
       ) : null}

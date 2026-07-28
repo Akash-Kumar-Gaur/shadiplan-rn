@@ -1,13 +1,15 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
+import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useCreateTimelineEvent } from "../../hooks/use-checklist-mutations";
 import type { Wedding } from "../../lib/wedding-api";
 import { shortDate } from "../../lib/format";
 import { normalizeTimeForStorage } from "../../lib/time-utils";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
+import { AppTextInput } from "../AppTextInput";
 import { TimePicker } from "../TimePicker";
 import { colors } from "../../theme/tokens";
 
@@ -61,6 +63,24 @@ export const TimelineCreateSheet = forwardRef<BottomSheetModal, Props>(function 
     setShowDatePicker(false);
   };
 
+  const formValues = useMemo(
+    () => ({ name, eventDate, time, venue, dressCode }),
+    [name, eventDate, time, venue, dressCode],
+  );
+
+  const baseline = useMemo(
+    () => ({
+      name: "",
+      eventDate: defaultDate,
+      time: "19:00",
+      venue: "",
+      dressCode: "",
+    }),
+    [defaultDate],
+  );
+
+  const isDirty = useFormDirty(formValues, baseline);
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       setError("Event name is required");
@@ -89,22 +109,21 @@ export const TimelineCreateSheet = forwardRef<BottomSheetModal, Props>(function 
   };
 
   return (
-    <AppBottomSheet ref={innerRef} title="Add timeline event" onDismiss={reset}>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Event name</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          placeholder="e.g. Sangeet"
-          value={name}
-          onChangeText={setName}
-        />
-      </View>
+    <AppBottomSheet ref={innerRef} title="Add timeline event" isDirty={isDirty} onDismiss={reset}>
+      <AppTextInput
+        label="Event name"
+        placeholder="e.g. Sangeet"
+        value={name}
+        onChangeText={setName}
+      />
 
       <View style={formStyles.field}>
         <Text style={formStyles.label}>Date</Text>
-        <Pressable onPress={() => setShowDatePicker(true)}>
-          <Text style={formStyles.input}>{eventDate ? shortDate(eventDate) : "Pick date"}</Text>
-        </Pressable>
+        <AppPressable style={formStyles.input} onPress={() => setShowDatePicker(true)}>
+          <Text style={{ color: eventDate ? colors.charcoal : colors.textMuted, fontSize: 15 }}>
+            {eventDate ? shortDate(eventDate) : "Pick date"}
+          </Text>
+        </AppPressable>
         {showDatePicker ? (
           <DateTimePicker
             value={eventDate ? parseIsoDate(eventDate) : new Date()}
@@ -128,25 +147,19 @@ export const TimelineCreateSheet = forwardRef<BottomSheetModal, Props>(function 
         <TimePicker value={time} onChange={setTime} />
       </View>
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Venue</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          placeholder="Venue name"
-          value={venue}
-          onChangeText={setVenue}
-        />
-      </View>
+      <AppTextInput
+        label="Venue"
+        placeholder="Venue name"
+        value={venue}
+        onChangeText={setVenue}
+      />
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Dress code</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          placeholder="e.g. Traditional"
-          value={dressCode}
-          onChangeText={setDressCode}
-        />
-      </View>
+      <AppTextInput
+        label="Dress code"
+        placeholder="e.g. Traditional"
+        value={dressCode}
+        onChangeText={setDressCode}
+      />
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
 

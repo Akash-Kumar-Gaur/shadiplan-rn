@@ -1,10 +1,12 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
+import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useSetWeddingBudget } from "../../hooks/use-checklist-mutations";
 import { colors } from "../../theme/tokens";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
+import { AppTextInput } from "../AppTextInput";
 
 type Props = {
   weddingId: string | undefined;
@@ -27,6 +29,17 @@ export const SetBudgetSheet = forwardRef<BottomSheetModal, Props>(function SetBu
     setError(null);
   };
 
+  const formValues = useMemo(() => ({ amount }), [amount]);
+
+  const baseline = useMemo(
+    () => ({
+      amount: currentBudget != null ? String(currentBudget) : "",
+    }),
+    [currentBudget],
+  );
+
+  const isDirty = useFormDirty(formValues, baseline);
+
   const handleSubmit = async () => {
     const parsed = Number(amount);
     if (!parsed || parsed <= 0) {
@@ -43,15 +56,15 @@ export const SetBudgetSheet = forwardRef<BottomSheetModal, Props>(function SetBu
   };
 
   return (
-    <AppBottomSheet ref={innerRef} title="Set total budget" onDismiss={reset}>
+    <AppBottomSheet ref={innerRef} title="Set total budget" isDirty={isDirty} onDismiss={reset}>
       <View style={formStyles.field}>
-        <Text style={formStyles.label}>Total budget (₹)</Text>
-        <SheetTextInput
-          style={formStyles.input}
+        <AppTextInput
+          label="Total budget (₹)"
           keyboardType="number-pad"
           placeholder="e.g. 5000000"
           value={amount}
           onChangeText={setAmount}
+          containerStyle={{ marginBottom: 0 }}
         />
         <Text style={{ marginTop: 6, fontSize: 12, color: colors.mutedForeground }}>
           Your overall wedding budget — category splits can be adjusted in Wallet.

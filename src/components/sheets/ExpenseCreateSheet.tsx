@@ -1,14 +1,16 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useCreateBudgetCategory, useCreateExpense } from "../../hooks/use-wallet-mutations";
 import type { BudgetCategory } from "../../types/wedding";
 import { EXPENSE_TAG_PRESETS, NEW_CATEGORY_VALUE } from "../../types/wedding";
 import { shortDate } from "../../lib/format";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
-import { SheetPicker } from "../SheetPicker";
+import { AppSelect } from "../AppSelect";
+import { AppTextInput } from "../AppTextInput";
 import { colors, fonts, radius } from "../../theme/tokens";
 
 type Props = {
@@ -57,6 +59,36 @@ export const ExpenseCreateSheet = forwardRef<BottomSheetModal, Props>(function E
       setCategoryId(budgetCategories[0]?.id ?? NEW_CATEGORY_VALUE);
     }
   }, [budgetCategories]);
+
+  const formValues = useMemo(
+    () => ({
+      amount,
+      categoryId,
+      newCategoryName,
+      vendorName,
+      paidDate: paidDate.toISOString().slice(0, 10),
+      note,
+      taggedFor,
+      customTag,
+    }),
+    [amount, categoryId, newCategoryName, vendorName, paidDate, note, taggedFor, customTag],
+  );
+
+  const baseline = useMemo(
+    () => ({
+      amount: "",
+      categoryId: budgetCategories[0]?.id ?? NEW_CATEGORY_VALUE,
+      newCategoryName: "",
+      vendorName: "",
+      paidDate: new Date().toISOString().slice(0, 10),
+      note: "",
+      taggedFor: [] as string[],
+      customTag: "",
+    }),
+    [budgetCategories],
+  );
+
+  const isDirty = useFormDirty(formValues, baseline);
 
   const toggleTag = (tag: string) => {
     setTaggedFor((prev) =>
@@ -123,33 +155,30 @@ export const ExpenseCreateSheet = forwardRef<BottomSheetModal, Props>(function E
   );
 
   return (
-    <AppBottomSheet ref={innerRef} title="Add expense" onDismiss={reset}>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Amount *</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="numeric"
-          placeholder="0"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+    <AppBottomSheet ref={innerRef} title="Add expense" isDirty={isDirty} onDismiss={reset}>
+      <AppTextInput
+        label="Amount *"
+        value={amount}
+        onChangeText={setAmount}
+        keyboardType="numeric"
+        placeholder="0"
+      />
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Category</Text>
-        <SheetPicker selectedValue={categoryId} onValueChange={setCategoryId} items={categoryItems} />
-      </View>
+      <AppSelect
+        label="Category"
+        value={categoryId}
+        onSelect={setCategoryId}
+        options={categoryItems}
+      />
 
       {categoryId === NEW_CATEGORY_VALUE ? (
         <View style={formStyles.card}>
-          <Text style={formStyles.label}>New category name *</Text>
-          <SheetTextInput
-            style={formStyles.input}
+          <AppTextInput
+            label="New category name *"
             value={newCategoryName}
             onChangeText={setNewCategoryName}
             placeholder="e.g. Decor"
-            placeholderTextColor={colors.textMuted}
+            containerStyle={{ marginBottom: 0 }}
           />
         </View>
       ) : null}
@@ -185,14 +214,13 @@ export const ExpenseCreateSheet = forwardRef<BottomSheetModal, Props>(function E
           ))}
         </View>
         <View style={tagStyles.customRow}>
-          <SheetTextInput
-            style={[formStyles.input, tagStyles.customInput]}
+          <AppTextInput
             value={customTag}
             onChangeText={setCustomTag}
             placeholder="Custom name or role"
-            placeholderTextColor={colors.textMuted}
             onSubmitEditing={addCustomTag}
             returnKeyType="done"
+            containerStyle={{ flex: 1, marginBottom: 0 }}
           />
           <AppPressable onPress={addCustomTag} style={tagStyles.addCustomBtn}>
             <Text style={tagStyles.addCustomText}>Add</Text>
@@ -200,21 +228,17 @@ export const ExpenseCreateSheet = forwardRef<BottomSheetModal, Props>(function E
         </View>
       </View>
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Vendor / description</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={vendorName}
-          onChangeText={setVendorName}
-          placeholder="Optional"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+      <AppTextInput
+        label="Vendor / description"
+        value={vendorName}
+        onChangeText={setVendorName}
+        placeholder="Optional"
+      />
 
       <View style={formStyles.field}>
         <Text style={formStyles.label}>Date</Text>
         <AppPressable style={formStyles.input} onPress={() => setShowDatePicker(true)}>
-          <Text style={{ paddingTop: 12, color: colors.foreground }}>
+          <Text style={{ color: colors.charcoal, fontSize: 15 }}>
             {shortDate(paidDate.toISOString().slice(0, 10))}
           </Text>
         </AppPressable>
@@ -230,10 +254,7 @@ export const ExpenseCreateSheet = forwardRef<BottomSheetModal, Props>(function E
         ) : null}
       </View>
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Note</Text>
-        <SheetTextInput style={formStyles.textarea} value={note} onChangeText={setNote} multiline />
-      </View>
+      <AppTextInput label="Note" value={note} onChangeText={setNote} multiline />
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
 
@@ -290,13 +311,10 @@ const tagStyles = StyleSheet.create({
     marginTop: 10,
     alignItems: "center"
 },
-  customInput: {
-    flex: 1
-},
   addCustomBtn: {
-    height: 44,
+    height: 48,
     paddingHorizontal: 14,
-    borderRadius: radius.sm,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: "center",

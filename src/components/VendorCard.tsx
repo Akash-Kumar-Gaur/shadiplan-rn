@@ -1,7 +1,8 @@
 import { Phone } from "lucide-react-native";
 import { StyleSheet, Text, View } from "react-native";
 import type { Vendor } from "../types/wedding";
-import { formatINR, shortDate } from "../lib/format";
+import { shortDate } from "../lib/format";
+import { AmountText } from "./AmountText";
 import { AppPressable } from "./AppPressable";
 import { StatusBadge } from "./StatusBadge";
 import { colors, fonts, radius } from "../theme/tokens";
@@ -29,13 +30,14 @@ export function VendorCard({ vendor, onPress }: { vendor: Vendor; onPress: () =>
       <View style={styles.stats}>
         <View style={styles.stat}>
           <Text style={styles.statLabel}>Advance paid</Text>
-          <Text style={styles.statValue}>{formatINR(vendor.advancePaid)}</Text>
+          <AmountText value={vendor.advancePaid} style={styles.statValue} />
         </View>
         <View style={styles.stat}>
           <Text style={styles.statLabel}>Balance due</Text>
-          <Text style={[styles.statValue, balance <= 0 && styles.statMuted]}>
-            {formatINR(balance)}
-          </Text>
+          <AmountText
+            value={balance}
+            style={[styles.statValue, balance <= 0 && styles.statMuted]}
+          />
         </View>
       </View>
       <View style={styles.footer}>

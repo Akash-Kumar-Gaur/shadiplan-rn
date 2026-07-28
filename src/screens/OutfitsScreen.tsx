@@ -1,13 +1,16 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../components/AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../components/AppBottomSheet";
 import { AppPressable } from "../components/AppPressable";
+import { requestAppConfirm } from "../components/ConfirmSheet";
+import { AppTextInput } from "../components/AppTextInput";
 import { ScreenEmpty } from "../components/ScreenEmpty";
 import { ScreenLoader } from "../components/ScreenLoader";
 import { StackScreenHeader } from "../components/StackScreenHeader";
+import { useFormDirty } from "../hooks/use-form-dirty";
 import { useTimelineEvents } from "../hooks/use-timeline-events";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
 import { dateTabLabel, distinctEventDates } from "../lib/lead-time-dates";
@@ -41,6 +44,10 @@ export function OutfitsScreen() {
   const editRef = useRef<BottomSheetModal>(null);
   const addPersonRef = useRef<BottomSheetModal>(null);
   const [newPerson, setNewPerson] = useState("");
+
+  const addPersonFormValues = useMemo(() => ({ newPerson }), [newPerson]);
+  const addPersonBaseline = useMemo(() => ({ newPerson: "" }), []);
+  const addPersonDirty = useFormDirty(addPersonFormValues, addPersonBaseline);
 
   const plansQuery = useQuery({
     queryKey: weddingQueryKeys.outfitPlans(weddingId ?? ""),
@@ -258,17 +265,18 @@ export function OutfitsScreen() {
         onDismiss={() => setEditTarget(null)}
       />
 
-      <AppBottomSheet ref={addPersonRef} title="Add person">
-        <View style={formStyles.field}>
-          <Text style={formStyles.label}>Name</Text>
-          <SheetTextInput
-            style={formStyles.input}
-            value={newPerson}
-            onChangeText={setNewPerson}
-            placeholder="e.g. Sister of Bride"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+      <AppBottomSheet
+        ref={addPersonRef}
+        title="Add person"
+        isDirty={addPersonDirty}
+        onDismiss={() => setNewPerson("")}
+      >
+        <AppTextInput
+          label="Name"
+          value={newPerson}
+          onChangeText={setNewPerson}
+          placeholder="e.g. Sister of Bride"
+        />
         <AppPressable
           onPress={() => {
             const name = newPerson.trim();
@@ -314,6 +322,23 @@ const OutfitEditSheet = forwardRef<
     setError(null);
   }, [target]);
 
+  const formValues = useMemo(
+    () => ({ description, color, designer, notes }),
+    [description, color, designer, notes],
+  );
+
+  const baseline = useMemo(
+    () => ({
+      description: target?.existing?.outfitDescription ?? "",
+      color: target?.existing?.color ?? "",
+      designer: target?.existing?.jewellerOrDesigner ?? "",
+      notes: target?.existing?.notes ?? "",
+    }),
+    [target],
+  );
+
+  const isDirty = useFormDirty(formValues, baseline);
+
   const handleSave = async () => {
     if (!target) return;
     setError(null);
@@ -336,18 +361,15 @@ const OutfitEditSheet = forwardRef<
       ref={innerRef}
       title={target ? `${target.person}` : "Outfit"}
       subtitle={target?.event.name}
+      isDirty={isDirty}
       onDismiss={onDismiss}
     >
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Outfit</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={description}
-          onChangeText={setDescription}
-          placeholder="e.g. Red lehenga"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+      <AppTextInput
+        label="Outfit"
+        value={description}
+        onChangeText={setDescription}
+        placeholder="e.g. Red lehenga"
+      />
       <View style={formStyles.field}>
         <Text style={formStyles.label}>Color</Text>
         <View style={styles.colorGrid}>
@@ -367,27 +389,19 @@ const OutfitEditSheet = forwardRef<
           ))}
         </View>
       </View>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Designer / jeweller</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={designer}
-          onChangeText={setDesigner}
-          placeholder="Optional"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Notes</Text>
-        <SheetTextInput
-          style={formStyles.textarea}
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          placeholder="Optional"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+      <AppTextInput
+        label="Designer / jeweller"
+        value={designer}
+        onChangeText={setDesigner}
+        placeholder="Optional"
+      />
+      <AppTextInput
+        label="Notes"
+        value={notes}
+        onChangeText={setNotes}
+        multiline
+        placeholder="Optional"
+      />
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
       <AppPressable
         onPress={() => void handleSave()}
@@ -403,14 +417,12 @@ const OutfitEditSheet = forwardRef<
       {target?.existing ? (
         <AppPressable
           onPress={() =>
-            Alert.alert("Clear outfit?", undefined, [
-              { text: "Cancel", style: "cancel" },
-              {
-                text: "Delete",
-                style: "destructive",
-                onPress: () => void onDelete(target.existing!.id)
-},
-            ])
+            requestAppConfirm({
+              title: "Clear outfit?",
+              confirmLabel: "Delete",
+              destructive: true,
+              onConfirm: () => void onDelete(target.existing!.id),
+            })
           }
           style={formStyles.outlineBtn}
         >

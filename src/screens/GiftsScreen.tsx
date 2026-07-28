@@ -2,17 +2,20 @@ import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Gift as GiftIcon, Trash2 } from "lucide-react-native";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../components/AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../components/AppBottomSheet";
 import { AppPressable } from "../components/AppPressable";
+import { requestAppConfirm } from "../components/ConfirmSheet";
+import { AppTextInput } from "../components/AppTextInput";
 import { Fab } from "../components/Fab";
 import { ScreenEmpty } from "../components/ScreenEmpty";
 import { ScreenLoader } from "../components/ScreenLoader";
 import { StackScreenHeader } from "../components/StackScreenHeader";
+import { useFormDirty } from "../hooks/use-form-dirty";
 import { useGuests } from "../hooks/use-vendor-guest-queries";
+import { AmountText } from "../components/AmountText";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
-import { formatINR } from "../lib/format";
 import {
   deleteGift,
   fetchGifts,
@@ -91,20 +94,19 @@ export function GiftsScreen() {
   };
 
   const confirmDeleteGift = (gift: Gift) => {
-    Alert.alert("Delete gift?", gift.giverName, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () =>
-          deleteMutation.mutate(gift.id, {
-            onSuccess: () => {
-              editRef.current?.dismiss();
-              setEditingGift(null);
-            }
-})
-},
-    ]);
+    requestAppConfirm({
+      title: "Delete gift?",
+      message: gift.giverName,
+      confirmLabel: "Delete",
+      destructive: true,
+      onConfirm: () =>
+        deleteMutation.mutate(gift.id, {
+          onSuccess: () => {
+            editRef.current?.dismiss();
+            setEditingGift(null);
+          },
+        }),
+    });
   };
 
   const loading = weddingLoading || (!!weddingId && giftsQuery.isPending);
@@ -166,14 +168,22 @@ export function GiftsScreen() {
                   accessibilityLabel={`Edit gift from ${gift.giverName}`}
                 >
                   <Text style={styles.name}>{gift.giverName}</Text>
-                  <Text style={styles.meta}>
-                    {[
-                      gift.amount != null ? formatINR(gift.amount) : null,
-                      gift.giftDescription,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || "—"}
-                  </Text>
+                  <View style={styles.metaRow}>
+                    {gift.amount != null ? (
+                      <AmountText value={gift.amount} style={styles.meta} />
+                    ) : null}
+                    {gift.amount != null && gift.giftDescription ? (
+                      <Text style={styles.meta}> · </Text>
+                    ) : null}
+                    {gift.giftDescription ? (
+                      <Text style={styles.meta} numberOfLines={1}>
+                        {gift.giftDescription}
+                      </Text>
+                    ) : null}
+                    {gift.amount == null && !gift.giftDescription ? (
+                      <Text style={styles.meta}>—</Text>
+                    ) : null}
+                  </View>
                 </AppPressable>
                 <View style={styles.thanksRow}>
                   <Text style={styles.thanksLabel}>Thank you sent</Text>
@@ -282,6 +292,34 @@ const GiftFormSheet = forwardRef<
     setError(null);
   };
 
+  const formValues = useMemo(
+    () => ({
+      giverName,
+      guestId,
+      guestQuery,
+      amount,
+      description,
+      notes,
+      thankYouSent,
+    }),
+    [giverName, guestId, guestQuery, amount, description, notes, thankYouSent],
+  );
+
+  const baseline = useMemo(
+    () => ({
+      giverName: gift?.giverName ?? "",
+      guestId: gift?.guestId,
+      guestQuery: gift?.giverName ?? "",
+      amount: gift?.amount != null ? String(gift.amount) : "",
+      description: gift?.giftDescription ?? "",
+      notes: gift?.notes ?? "",
+      thankYouSent: gift?.thankYouSent ?? false,
+    }),
+    [gift],
+  );
+
+  const isDirty = useFormDirty(formValues, baseline);
+
   const handleSubmit = async () => {
     if (!giverName.trim()) {
       setError("Giver name is required");
@@ -333,12 +371,12 @@ const GiftFormSheet = forwardRef<
     <AppBottomSheet
       ref={innerRef}
       title={isEdit ? "Edit gift" : "Add gift"}
+      isDirty={isDirty}
       onDismiss={onDismiss}
     >
       <View style={formStyles.field}>
-        <Text style={formStyles.label}>From</Text>
-        <SheetTextInput
-          style={formStyles.input}
+        <AppTextInput
+          label="From"
           value={giverName}
           onChangeText={(text: string) => {
             setGiverName(text);
@@ -346,7 +384,7 @@ const GiftFormSheet = forwardRef<
             setGuestId(undefined);
           }}
           placeholder="Guest or giver name"
-          placeholderTextColor={colors.textMuted}
+          containerStyle={{ marginBottom: 0 }}
         />
         {suggestions.length > 0 && !guestId ? (
           <View style={styles.suggestions}>
@@ -366,38 +404,26 @@ const GiftFormSheet = forwardRef<
           </View>
         ) : null}
       </View>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Amount (₹)</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="numeric"
-          placeholder="Optional"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Gift description</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Optional"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Notes</Text>
-        <SheetTextInput
-          style={formStyles.textarea}
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          placeholder="Optional"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+      <AppTextInput
+        label="Amount (₹)"
+        value={amount}
+        onChangeText={setAmount}
+        keyboardType="numeric"
+        placeholder="Optional"
+      />
+      <AppTextInput
+        label="Gift description"
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Optional"
+      />
+      <AppTextInput
+        label="Notes"
+        value={notes}
+        onChangeText={setNotes}
+        multiline
+        placeholder="Optional"
+      />
       <View style={formStyles.switchRow}>
         <Text style={formStyles.label}>Thank you sent</Text>
         <Switch
@@ -459,6 +485,12 @@ const styles = StyleSheet.create({
 },
   name: { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.foreground },
   meta: { marginTop: 2, fontFamily: fonts.body, fontSize: 12, color: colors.mutedForeground },
+  metaRow: {
+    marginTop: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+  },
   thanksRow: {
     marginTop: 8,
     flexDirection: "row",

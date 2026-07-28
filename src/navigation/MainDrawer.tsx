@@ -6,6 +6,8 @@ import {
 import {
   Camera,
   ClipboardList,
+  Eye,
+  EyeOff,
   Gift,
   LogOut,
   Music,
@@ -13,9 +15,11 @@ import {
   Shirt,
   UserPlus,
 } from "lucide-react-native";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppPressable } from "../components/AppPressable";
+import { requestAppConfirm } from "../components/ConfirmSheet";
+import { useAmountsHiddenPreference } from "../components/AmountText";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
 import { useAuth } from "../lib/auth";
 import { colors, fonts } from "../theme/tokens";
@@ -45,6 +49,7 @@ function ProfileDrawerContent(props: DrawerContentComponentProps) {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
   const { data: wedding } = useWeddingMeta();
+  const { amountsHidden, toggleAmountsHidden } = useAmountsHiddenPreference();
 
   const close = () => props.navigation.closeDrawer();
 
@@ -54,17 +59,16 @@ function ProfileDrawerContent(props: DrawerContentComponentProps) {
   };
 
   const handleSignOut = () => {
-    Alert.alert("Sign out", "Sign out of ShadiPlan?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign out",
-        style: "destructive",
-        onPress: () => {
-          close();
-          void signOut();
-        },
+    requestAppConfirm({
+      title: "Sign out",
+      message: "Sign out of ShadiPlan?",
+      confirmLabel: "Sign out",
+      destructive: true,
+      onConfirm: () => {
+        close();
+        void signOut();
       },
-    ]);
+    });
   };
 
   return (
@@ -101,6 +105,21 @@ function ProfileDrawerContent(props: DrawerContentComponentProps) {
       </View>
 
       <View style={styles.footer}>
+        <AppPressable
+          onPress={toggleAmountsHidden}
+          style={styles.row}
+          accessibilityRole="button"
+          accessibilityLabel={amountsHidden ? "Show amounts" : "Hide amounts"}
+        >
+          {amountsHidden ? (
+            <EyeOff size={18} color={colors.foreground} />
+          ) : (
+            <Eye size={18} color={colors.foreground} />
+          )}
+          <Text style={styles.rowLabel}>
+            {amountsHidden ? "Show amounts" : "Hide amounts"}
+          </Text>
+        </AppPressable>
         <AppPressable
           onPress={handleSignOut}
           style={styles.row}

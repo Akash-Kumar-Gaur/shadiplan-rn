@@ -2,14 +2,17 @@ import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Phone, Trash2 } from "lucide-react-native";
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../components/AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../components/AppBottomSheet";
 import { AppPressable } from "../components/AppPressable";
+import { requestAppConfirm } from "../components/ConfirmSheet";
+import { AppTextInput } from "../components/AppTextInput";
 import { Fab } from "../components/Fab";
 import { ScreenEmpty } from "../components/ScreenEmpty";
 import { ScreenLoader } from "../components/ScreenLoader";
 import { StackScreenHeader } from "../components/StackScreenHeader";
+import { useFormDirty } from "../hooks/use-form-dirty";
 import { useVendors } from "../hooks/use-vendor-guest-queries";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
 import {
@@ -137,14 +140,13 @@ export function EmergencyContactsScreen() {
               </AppPressable>
               <AppPressable
                 onPress={() =>
-                  Alert.alert("Delete contact?", c.name, [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Delete",
-                      style: "destructive",
-                      onPress: () => deleteMutation.mutate(c.id)
-},
-                  ])
+                  requestAppConfirm({
+                    title: "Delete contact?",
+                    message: c.name,
+                    confirmLabel: "Delete",
+                    destructive: true,
+                    onConfirm: () => deleteMutation.mutate(c.id),
+                  })
                 }
                 style={styles.deleteBtn}
                 accessibilityLabel="Delete contact"
@@ -214,6 +216,23 @@ const ContactFormSheet = forwardRef<
     setError(null);
   };
 
+  const formValues = useMemo(
+    () => ({ name, phone, role, notes }),
+    [name, phone, role, notes],
+  );
+
+  const baseline = useMemo(
+    () => ({
+      name: contact?.name ?? "",
+      phone: contact?.phone ?? "",
+      role: contact?.role ?? "",
+      notes: contact?.notes ?? "",
+    }),
+    [contact],
+  );
+
+  const isDirty = useFormDirty(formValues, baseline);
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       setError("Name is required");
@@ -255,50 +274,35 @@ const ContactFormSheet = forwardRef<
     <AppBottomSheet
       ref={innerRef}
       title={isEdit ? "Edit contact" : "Add contact"}
+      isDirty={isDirty}
       onDismiss={onDismiss}
     >
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Name</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. Nearest hospital"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Phone</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={phone}
-          onChangeText={setPhone}
-          keyboardType="phone-pad"
-          placeholder="+91 …"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Role</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={role}
-          onChangeText={setRole}
-          placeholder="Optional"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Notes</Text>
-        <SheetTextInput
-          style={formStyles.textarea}
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          placeholder="Optional"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+      <AppTextInput
+        label="Name"
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. Nearest hospital"
+      />
+      <AppTextInput
+        label="Phone"
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+        placeholder="+91 …"
+      />
+      <AppTextInput
+        label="Role"
+        value={role}
+        onChangeText={setRole}
+        placeholder="Optional"
+      />
+      <AppTextInput
+        label="Notes"
+        value={notes}
+        onChangeText={setNotes}
+        multiline
+        placeholder="Optional"
+      />
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
       <AppPressable
         onPress={() => void handleSubmit()}

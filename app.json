@@ -12,7 +12,8 @@
       "backgroundColor": "#6B2C1F"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "deploymentTarget": "15.4"
     },
     "android": {
       "package": "in.redevolve.shadiplan",
@@ -26,7 +27,8 @@
       "permissions": [
         "android.permission.READ_CONTACTS",
         "android.permission.WRITE_CONTACTS",
-        "android.permission.POST_NOTIFICATIONS"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -53,9 +55,18 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow ShadiPlan to attach estimate photos to vendor shortlist."
+        }
+      ],
+      "expo-document-picker",
+      [
         "expo-build-properties",
         {
           "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
             "enableBundleCompression": true
@@ -66,9 +77,7 @@
     "updates": {
       "url": "https://u.expo.dev/f790462d-c3a1-4a1b-8c9e-7cbd80519f15"
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "extra": {
       "eas": {
         "projectId": "f790462d-c3a1-4a1b-8c9e-7cbd80519f15"

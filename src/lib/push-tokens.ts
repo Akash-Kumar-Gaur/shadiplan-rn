@@ -1,7 +1,8 @@
 import { isRunningInExpoGo } from "expo";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
-import { Alert, Linking, Platform } from "react-native";
+import { Linking, Platform } from "react-native";
+import { requestAppConfirm } from "../components/ConfirmSheet";
 import { isSupabaseConfigured, supabase } from "./supabase";
 
 /**
@@ -33,14 +34,14 @@ function easProjectId(): string | undefined {
 function promptOpenSettingsOnce() {
   if (deniedSettingsPrompted) return;
   deniedSettingsPrompted = true;
-  Alert.alert(
-    "Notifications disabled",
-    "ShadiPlan needs notification permission to receive broadcasts. Enable it in system settings.",
-    [
-      { text: "Not now", style: "cancel" },
-      { text: "Open Settings", onPress: () => void Linking.openSettings() },
-    ],
-  );
+  requestAppConfirm({
+    title: "Notifications disabled",
+    message:
+      "ShadiPlan needs notification permission to receive broadcasts. Enable it in system settings.",
+    cancelLabel: "Not now",
+    confirmLabel: "Open Settings",
+    onConfirm: () => void Linking.openSettings(),
+  });
 }
 
 /**
@@ -118,7 +119,20 @@ export async function registerDevicePushToken(userId: string): Promise<string | 
       pushToken = tokenResult.data;
       console.log("[PUSH] got token:", pushToken);
     } catch (err) {
-      console.log("[PUSH] getExpoPushTokenAsync FAILED:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      const needsFcm =
+        Platform.OS === "android" &&
+        (message.includes("FirebaseApp") ||
+          message.includes("fcm-credentials") ||
+          message.includes("Default FirebaseApp"));
+      if (needsFcm) {
+        console.warn(
+          "[PUSH] Remote push unavailable: Android FCM credentials not configured. " +
+            "Local reminders still work. See https://docs.expo.dev/push-notifications/fcm-credentials/",
+        );
+      } else {
+        console.log("[PUSH] getExpoPushTokenAsync FAILED:", err);
+      }
       return null;
     }
     if (!pushToken) {

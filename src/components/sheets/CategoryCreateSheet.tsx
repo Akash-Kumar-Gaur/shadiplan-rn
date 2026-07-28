@@ -1,14 +1,15 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Text } from "react-native";
+import { useFormDirty } from "../../hooks/use-form-dirty";
 import {
   useCreateBudgetCategory,
   useUpdateBudgetCategory
 } from "../../hooks/use-wallet-mutations";
 import type { BudgetCategory } from "../../types/wedding";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
-import { colors } from "../../theme/tokens";
+import { AppTextInput } from "../AppTextInput";
 
 type Props = {
   weddingId: string | undefined;
@@ -51,6 +52,18 @@ export const CategoryFormSheet = forwardRef<BottomSheetModal, Props>(function Ca
     setError(null);
   };
 
+  const formValues = useMemo(() => ({ name, planned }), [name, planned]);
+
+  const baseline = useMemo(
+    () => ({
+      name: category?.name ?? "",
+      planned: category ? String(category.planned) : "",
+    }),
+    [category],
+  );
+
+  const isDirty = useFormDirty(formValues, baseline);
+
   const handleSubmit = async () => {
     if (!name.trim()) {
       setError("Category name is required");
@@ -84,33 +97,26 @@ export const CategoryFormSheet = forwardRef<BottomSheetModal, Props>(function Ca
     <AppBottomSheet
       ref={innerRef}
       title={isEdit ? "Edit category" : "Add category"}
+      isDirty={isDirty}
       onDismiss={() => {
         reset();
         onDone?.();
       }}
     >
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Name *</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. Photography"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+      <AppTextInput
+        label="Name *"
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. Photography"
+      />
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Planned amount</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={planned}
-          onChangeText={setPlanned}
-          keyboardType="numeric"
-          placeholder="0"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+      <AppTextInput
+        label="Planned amount"
+        value={planned}
+        onChangeText={setPlanned}
+        keyboardType="numeric"
+        placeholder="0"
+      />
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
 

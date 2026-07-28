@@ -9,14 +9,32 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native secrets & signing (never commit)
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
+!**/debug.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
+*.apks
+*.aab
+*.apk
+!android/app/debug.keystore
+keystore.properties
+android/keystore.properties
+android/local.properties
+.env.release
+
+# Android build outputs / IDE (source under android/ is tracked for local Play builds)
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/.idea/
+android/captures/
 
 # Metro
 .metro-health-check*
@@ -37,6 +55,5 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# generated native folders
+# generated iOS (regenerate with prebuild when needed)
 /ios
-/android

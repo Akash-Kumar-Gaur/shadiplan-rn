@@ -21,6 +21,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppPressable } from "../components/AppPressable";
+import { AnimatedScreenTitle } from "../components/AnimatedScreenTitle";
 import { DrawerMenuButton } from "../components/DrawerMenuButton";
 import { HeroBackdrop } from "../components/HeroBackdrop";
 import { ScreenEmpty } from "../components/ScreenEmpty";
@@ -33,14 +34,15 @@ import { useWalletData } from "../hooks/use-wallet-queries";
 import { useTimelineEvents } from "../hooks/use-timeline-events";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
 import { computeGuestHeadcounts } from "../lib/guest-headcount";
-import { formatDate, formatINR } from "../lib/format";
+import { formatDate } from "../lib/format";
+import { AmountText } from "../components/AmountText";
 import { formatShortDate } from "../lib/lead-time-dates";
 import { daysUntil, daysUntilWedding, isWeddingPast } from "../lib/wedding-dates";
 import type { TimelineEvent } from "../lib/wedding-api";
 import type { Vendor, VendorCategory } from "../types/wedding";
 import { formatDisplayTime, parseTimeToMinutes } from "../lib/time-utils";
 import { colors, fonts, radius, spacing } from "../theme/tokens";
-import type { MainTabParamList } from "../navigation/types";
+import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 
 const CATEGORY_ICON: Record<VendorCategory, typeof Store> = {
   Venue: Building2,
@@ -64,6 +66,15 @@ function sortTimelineEvents<T extends { eventDate: string; time: string }>(event
 export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+
+  const openRootScreen = useCallback(
+    (screen: keyof RootStackParamList) => {
+      // Tab → Drawer → Stack
+      const stack = navigation.getParent()?.getParent();
+      stack?.navigate(screen as never);
+    },
+    [navigation],
+  );
 
   const {
     data: wedding,
@@ -129,7 +140,7 @@ export function HomeScreen() {
   if (!wedding) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <ScreenEmpty description="Set up your wedding on the web app to see your dashboard." />
+        <ScreenEmpty description="Finish setting up your wedding to see your dashboard." />
       </View>
     );
   }
@@ -161,7 +172,9 @@ export function HomeScreen() {
           <View style={styles.headerTop}>
             <View style={styles.headerText}>
               <Text style={styles.eyebrow}>{wedding.location || "Your wedding"}</Text>
-              <Text style={styles.coupleTitle}>{wedding.coupleNames}</Text>
+              <AnimatedScreenTitle style={styles.coupleTitle}>
+                {wedding.coupleNames}
+              </AnimatedScreenTitle>
             </View>
             <DrawerMenuButton />
           </View>
@@ -198,13 +211,24 @@ export function HomeScreen() {
         </HeroBackdrop>
 
         <View style={styles.statRow}>
-          <StatTile icon={Store} label="Vendors" value={String(vendors.length)} />
-          <StatTile icon={Users} label="Guests" value={String(guestHeadcounts.maxHeadcount)} />
+          <StatTile
+            icon={Store}
+            label="Vendors"
+            value={String(vendors.length)}
+            onPress={() => navigation.navigate("Vendors")}
+          />
+          <StatTile
+            icon={Users}
+            label="Guests"
+            value={String(guestHeadcounts.maxHeadcount)}
+            onPress={() => navigation.navigate("Guests")}
+          />
           <StatTile
             icon={AlertCircle}
             label="Due soon"
             value={String(paymentsDue)}
             tone={paymentsDue > 0 ? "warning" : "neutral"}
+            onPress={() => navigation.navigate("Vendors")}
           />
         </View>
 
@@ -249,6 +273,22 @@ export function HomeScreen() {
           ) : null}
         </View>
 
+        <AppPressable
+          onPress={() => openRootScreen("PhotoAlbum")}
+          style={styles.albumCard}
+          accessibilityRole="button"
+          accessibilityLabel="Open photo album"
+        >
+          <View style={styles.albumIconWrap}>
+            <Camera size={20} color={colors.primary} />
+          </View>
+          <View style={styles.albumBody}>
+            <Text style={styles.albumTitle}>Photo Album</Text>
+            <Text style={styles.albumMeta}>Share & collect wedding photos</Text>
+          </View>
+          <ChevronRight size={18} color={colors.mutedForeground} />
+        </AppPressable>
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Budget</Text>
@@ -262,8 +302,10 @@ export function HomeScreen() {
           {hasBudget ? (
             <View style={styles.budgetCard}>
               <View style={styles.budgetRow}>
-                <Text style={styles.budgetSpent}>{formatINR(totalSpent)}</Text>
-                <Text style={styles.budgetTotal}>of {formatINR(wedding.totalBudget!)}</Text>
+                <AmountText value={totalSpent} style={styles.budgetSpent} />
+                <Text style={styles.budgetTotal}>
+                  of <AmountText value={wedding.totalBudget!} style={styles.budgetTotal} />
+                </Text>
               </View>
               <View style={styles.progressTrack}>
                 <View style={[styles.progressFill, { width: `${budgetPct}%` }]} />
@@ -301,14 +343,21 @@ function StatTile({
   label,
   value,
   tone = "neutral",
+  onPress,
 }: {
   icon: typeof Store;
   label: string;
   value: string;
   tone?: "neutral" | "warning";
+  onPress: () => void;
 }) {
   return (
-    <View style={styles.statTile}>
+    <AppPressable
+      onPress={onPress}
+      style={styles.statTile}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value}`}
+    >
       <View style={styles.statTileTop}>
         <View
           style={[
@@ -321,7 +370,7 @@ function StatTile({
         <Text style={styles.statLabel}>{label}</Text>
       </View>
       <Text style={styles.statValue}>{value}</Text>
-    </View>
+    </AppPressable>
   );
 }
 
@@ -347,9 +396,11 @@ function NextUpVendorRow({
         <Text style={styles.nextUpTitle} numberOfLines={1}>
           {vendor.name}
         </Text>
-        <Text style={styles.nextUpMeta} numberOfLines={1}>
-          Balance {formatINR(balance)} · due in {due}d
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap" }}>
+          <Text style={styles.nextUpMeta}>Balance </Text>
+          <AmountText value={balance} style={styles.nextUpMeta} />
+          <Text style={styles.nextUpMeta}> · due in {due}d</Text>
+        </View>
       </View>
       <StatusBadge status={vendor.status === "Confirmed" ? "done" : "pending"} />
     </AppPressable>
@@ -519,6 +570,40 @@ const styles = StyleSheet.create({
     fontSize: 24,
     lineHeight: 28,
     color: colors.foreground,
+  },
+  albumCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginBottom: 20,
+  },
+  albumIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.secondary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  albumBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  albumTitle: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 15,
+    color: colors.foreground,
+  },
+  albumMeta: {
+    marginTop: 2,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.mutedForeground,
   },
   section: {
     marginBottom: 20,

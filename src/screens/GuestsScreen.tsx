@@ -10,6 +10,7 @@ import { computeGuestHeadcounts } from "../lib/guest-headcount";
 import { useGuestGroups, useGuests } from "../hooks/use-vendor-guest-queries";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
 import { AppPressable } from "../components/AppPressable";
+import { AnimatedScreenTitle } from "../components/AnimatedScreenTitle";
 import { Fab } from "../components/Fab";
 import { FilterChip } from "../components/FilterChip";
 import { GuestHeadcountSummaryCard } from "../components/GuestHeadcountSummary";
@@ -88,7 +89,7 @@ export function GuestsScreen() {
         <View style={styles.headerTop}>
           <View style={styles.headerText}>
             <Text style={styles.eyebrow}>ShadiPlan</Text>
-            <Text style={styles.title}>Guests</Text>
+            <AnimatedScreenTitle style={styles.title}>Guests</AnimatedScreenTitle>
           </View>
           <DrawerMenuButton />
         </View>
@@ -127,7 +128,7 @@ export function GuestsScreen() {
 
       <View style={styles.body}>
         {!wedding ? (
-          <ScreenEmpty description="Set up your wedding on the web app to manage guests here." />
+          <ScreenEmpty description="Finish setting up your wedding to manage guests here." />
         ) : (
           <ScrollView
             style={styles.list}

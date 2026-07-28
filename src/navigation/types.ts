@@ -1,5 +1,15 @@
+import type { PlanAnswers } from "../lib/suggestion-engine";
+import type { OnboardingBasics } from "../lib/onboarding-api";
+
 export type AuthStackParamList = {
   Login: undefined;
+};
+
+export type OnboardingStackParamList = {
+  Basics: undefined;
+  Path: { basics: OnboardingBasics };
+  Questionnaire: { basics: OnboardingBasics };
+  Review: { basics: OnboardingBasics; answers: PlanAnswers };
 };
 
 export type MainTabParamList = {

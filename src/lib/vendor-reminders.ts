@@ -1,6 +1,7 @@
 import { isRunningInExpoGo } from "expo";
-import { Alert, Linking, Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import * as Device from "expo-device";
+import { requestAppConfirm } from "../components/ConfirmSheet";
 import type { Vendor } from "../types/wedding";
 import { formatINR } from "./format";
 
@@ -61,40 +62,30 @@ export async function ensureNotificationPermissions(): Promise<boolean> {
   if (current.granted) return true;
 
   if (current.status === "denied" && !current.canAskAgain) {
-    Alert.alert(
-      "Notifications disabled",
-      "Enable notifications in Settings to get reminded before vendor payments are due.",
-      [
-        { text: "Not now", style: "cancel" },
-        {
-          text: "Open Settings",
-          onPress: () => void Linking.openSettings(),
-        },
-      ],
-    );
+    requestAppConfirm({
+      title: "Notifications disabled",
+      message: "Enable notifications in Settings to get reminded before vendor payments are due.",
+      cancelLabel: "Not now",
+      confirmLabel: "Open Settings",
+      onConfirm: () => void Linking.openSettings(),
+    });
     return false;
   }
 
   return await new Promise<boolean>((resolve) => {
-    Alert.alert(
-      "Payment reminders",
-      "Get reminded before vendor payments are due — we'll notify you one day ahead.",
-      [
-        {
-          text: "Not now",
-          style: "cancel",
-          onPress: () => resolve(false),
-        },
-        {
-          text: "Allow",
-          onPress: () => {
-            void Notifications.requestPermissionsAsync().then((result) => {
-              resolve(result.granted);
-            });
-          },
-        },
-      ],
-    );
+    requestAppConfirm({
+      title: "Payment reminders",
+      message:
+        "Get reminded before vendor payments are due — we'll notify you one day ahead.",
+      cancelLabel: "Not now",
+      onCancel: () => resolve(false),
+      confirmLabel: "Allow",
+      onConfirm: () => {
+        void Notifications.requestPermissionsAsync().then((result) => {
+          resolve(result.granted);
+        });
+      },
+    });
   });
 }
 

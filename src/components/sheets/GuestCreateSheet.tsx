@@ -1,16 +1,18 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import * as Contacts from "expo-contacts";
 import { Contact } from "lucide-react-native";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Switch, Text, View } from "react-native";
 import type { GuestGroup, MealPref } from "../../types/wedding";
 import { NEW_GROUP_VALUE } from "../../types/wedding";
+import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useCreateGuest, useCreateGuestGroup } from "../../hooks/use-vendor-guest-mutations";
 import { AccompanyingCountStepper } from "../AccompanyingCountStepper";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
-import { SheetPicker } from "../SheetPicker";
-import { colors } from "../../theme/tokens";
+import { AppSelect } from "../AppSelect";
+import { AppTextInput } from "../AppTextInput";
+import { colors, fonts } from "../../theme/tokens";
 
 type Props = {
   weddingId: string | undefined;
@@ -60,6 +62,54 @@ export const GuestCreateSheet = forwardRef<BottomSheetModal, Props>(function Gue
     if (guestGroups.length === 0) setGroupId(NEW_GROUP_VALUE);
     else if (!groupId || groupId === NEW_GROUP_VALUE) setGroupId(guestGroups[0]?.id ?? NEW_GROUP_VALUE);
   }, [guestGroups]);
+
+  const formValues = useMemo(
+    () => ({
+      name,
+      groupId,
+      newGroupName,
+      newGroupSide,
+      phone,
+      email,
+      meal,
+      accompanyingCount,
+      accommodation,
+      transportNeeded,
+      notes,
+    }),
+    [
+      name,
+      groupId,
+      newGroupName,
+      newGroupSide,
+      phone,
+      email,
+      meal,
+      accompanyingCount,
+      accommodation,
+      transportNeeded,
+      notes,
+    ],
+  );
+
+  const baseline = useMemo(
+    () => ({
+      name: "",
+      groupId: guestGroups[0]?.id ?? NEW_GROUP_VALUE,
+      newGroupName: "",
+      newGroupSide: "Bride" as const,
+      phone: "",
+      email: "",
+      meal: "Veg" as MealPref,
+      accompanyingCount: 0,
+      accommodation: false,
+      transportNeeded: false,
+      notes: "",
+    }),
+    [guestGroups],
+  );
+
+  const isDirty = useFormDirty(formValues, baseline);
 
   const pickContact = async () => {
     const { status } = await Contacts.requestPermissionsAsync();
@@ -124,91 +174,77 @@ export const GuestCreateSheet = forwardRef<BottomSheetModal, Props>(function Gue
   ];
 
   return (
-    <AppBottomSheet ref={innerRef} title="Add guest" onDismiss={reset}>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Name *</Text>
-        <SheetTextInput
-          style={formStyles.input}
+    <AppBottomSheet ref={innerRef} title="Add guest" isDirty={isDirty} onDismiss={reset}>
+      <View style={{ marginBottom: 16 }}>
+        <AppTextInput
+          label="Name *"
           value={name}
           onChangeText={setName}
           placeholder="Guest name"
-          placeholderTextColor={colors.textMuted}
+          containerStyle={{ marginBottom: 8 }}
         />
-        <AppPressable onPress={pickContact} style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <AppPressable onPress={pickContact} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Contact size={16} color={colors.terracottaDark} />
-          <Text style={{ fontFamily: "Inter-Medium", fontSize: 14, color: colors.terracottaDark }}>
+          <Text style={{ fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.terracottaDark }}>
             Pick from contacts
           </Text>
         </AppPressable>
       </View>
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Group</Text>
-        <SheetPicker selectedValue={groupId} onValueChange={setGroupId} items={groupItems} />
-      </View>
+      <AppSelect
+        label="Group"
+        value={groupId}
+        onSelect={setGroupId}
+        options={groupItems}
+      />
 
       {groupId === NEW_GROUP_VALUE ? (
         <View style={formStyles.card}>
-          <View>
-            <Text style={formStyles.label}>New group name *</Text>
-            <SheetTextInput
-              style={formStyles.input}
-              value={newGroupName}
-              onChangeText={setNewGroupName}
-              placeholder="e.g. Sharma family"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-          <View>
-            <Text style={formStyles.label}>Side</Text>
-            <SheetPicker
-              selectedValue={newGroupSide}
-              onValueChange={setNewGroupSide}
-              items={[
-                { label: "Bride", value: "Bride" },
-                { label: "Groom", value: "Groom" },
-              ]}
-            />
-          </View>
+          <AppTextInput
+            label="New group name *"
+            value={newGroupName}
+            onChangeText={setNewGroupName}
+            placeholder="e.g. Sharma family"
+          />
+          <AppSelect
+            label="Side"
+            value={newGroupSide}
+            onSelect={setNewGroupSide}
+            options={[
+              { label: "Bride", value: "Bride" },
+              { label: "Groom", value: "Groom" },
+            ]}
+          />
         </View>
       ) : null}
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Phone</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={phone}
-          onChangeText={setPhone}
-          keyboardType="phone-pad"
-        />
-      </View>
+      <AppTextInput
+        label="Phone"
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+      />
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Email</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="you@example.com"
-          placeholderTextColor={colors.textMuted}
-        />
-      </View>
+      <AppTextInput
+        label="Email"
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        placeholder="you@example.com"
+      />
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Meal preference</Text>
-        <SheetPicker
-          selectedValue={meal}
-          onValueChange={setMeal}
-          items={[
-            { label: "Veg", value: "Veg" },
-            { label: "Non-veg", value: "Non-veg" },
-            { label: "Jain", value: "Jain" },
-          ]}
-        />
-      </View>
+      <AppSelect
+        label="Meal preference"
+        value={meal}
+        onSelect={setMeal}
+        options={[
+          { label: "Veg", value: "Veg" },
+          { label: "Non-veg", value: "Non-veg" },
+          { label: "Jain", value: "Jain" },
+        ]}
+      />
 
       <View style={formStyles.field}>
         <AccompanyingCountStepper value={accompanyingCount} onChange={setAccompanyingCount} />
@@ -224,10 +260,12 @@ export const GuestCreateSheet = forwardRef<BottomSheetModal, Props>(function Gue
         <Switch value={transportNeeded} onValueChange={setTransportNeeded} />
       </View>
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Notes</Text>
-        <SheetTextInput style={formStyles.textarea} value={notes} onChangeText={setNotes} multiline />
-      </View>
+      <AppTextInput
+        label="Notes"
+        value={notes}
+        onChangeText={setNotes}
+        multiline
+      />
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
 

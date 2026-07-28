@@ -1,11 +1,15 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Trash2 } from "lucide-react-native";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AmountText, useAmountsHiddenPreference } from "../components/AmountText";
 import { AppPressable } from "../components/AppPressable";
+import { AnimatedScreenTitle } from "../components/AnimatedScreenTitle";
+import { requestAppConfirm, showAppAlert } from "../components/ConfirmSheet";
+import { AppSelect } from "../components/AppSelect";
 import { DrawerMenuButton } from "../components/DrawerMenuButton";
 import { Fab } from "../components/Fab";
 import { ScreenEmpty } from "../components/ScreenEmpty";
@@ -17,15 +21,24 @@ import { SetBudgetSheet } from "../components/sheets/SetBudgetSheet";
 import { useDeleteBudgetCategory } from "../hooks/use-wallet-mutations";
 import { useWalletData } from "../hooks/use-wallet-queries";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
-import { formatINR, shortDate } from "../lib/format";
+import { shortDate } from "../lib/format";
 import { ensureDefaultBudgetCategoriesIfEmpty } from "../lib/wallet-api";
 import { weddingQueryKeys } from "../lib/wedding-query-keys";
 import type { BudgetCategory, Transaction } from "../types/wedding";
 import { colors, fonts, radius, spacing } from "../theme/tokens";
 
+type TxSort = "date" | "category" | "amount";
+
+const SORT_OPTIONS: { label: string; value: TxSort }[] = [
+  { label: "Date", value: "date" },
+  { label: "Category", value: "category" },
+  { label: "Amount", value: "amount" },
+];
+
 export function WalletScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const { amountsHidden, toggleAmountsHidden } = useAmountsHiddenPreference();
   const { data: wedding, isLoading: weddingLoading } = useWeddingMeta();
   const weddingId = wedding?.id;
 
@@ -44,6 +57,56 @@ export function WalletScreen() {
   const budgetRef = useRef<BottomSheetModal>(null);
   const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [txSort, setTxSort] = useState<TxSort>("date");
+
+  const categoryNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of budgetCategories) map.set(c.id, c.name);
+    return map;
+  }, [budgetCategories]);
+
+  const sortedTransactions = useMemo(() => {
+    const list = [...transactions];
+    if (txSort === "amount") {
+      return list.sort((a, b) => b.amount - a.amount);
+    }
+    if (txSort === "category") {
+      return list.sort((a, b) => {
+        const an = categoryNameById.get(a.categoryId) ?? "Uncategorized";
+        const bn = categoryNameById.get(b.categoryId) ?? "Uncategorized";
+        const byName = an.localeCompare(bn);
+        if (byName !== 0) return byName;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+    }
+    return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, txSort, categoryNameById]);
+
+  const transactionsByCategory = useMemo(() => {
+    if (txSort !== "category") return null;
+    const map = new Map<string, Transaction[]>();
+    for (const tx of sortedTransactions) {
+      const name = categoryNameById.get(tx.categoryId) ?? "Uncategorized";
+      const list = map.get(name) ?? [];
+      list.push(tx);
+      map.set(name, list);
+    }
+    return Array.from(map.entries());
+  }, [sortedTransactions, txSort, categoryNameById]);
+
+  /**
+   * Full amount counted against each tag present (shared expenses count fully
+   * for each person tagged — not split). Flagged in UI below.
+   */
+  const taggedTotals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const tx of transactions) {
+      for (const tag of tx.taggedFor ?? []) {
+        map.set(tag, (map.get(tag) ?? 0) + tx.amount);
+      }
+    }
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [transactions]);
 
   const seedAttempted = useRef(false);
   useEffect(() => {
@@ -83,27 +146,22 @@ export function WalletScreen() {
 
   const confirmDeleteCategory = useCallback(
     (cat: BudgetCategory) => {
-      Alert.alert(
-        "Delete category?",
-        `"${cat.name}" will be removed. Expenses in this category stay in your wallet as uncategorized.`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: () => {
-              deleteCategory.mutate(cat.id, {
-                onError: (err) => {
-                  Alert.alert(
-                    "Could not delete",
-                    err instanceof Error ? err.message : "Try again",
-                  );
-                },
-              });
+      requestAppConfirm({
+        title: "Delete category?",
+        message: `"${cat.name}" will be removed. Expenses in this category stay in your wallet as uncategorized.`,
+        confirmLabel: "Delete",
+        destructive: true,
+        onConfirm: () => {
+          deleteCategory.mutate(cat.id, {
+            onError: (err) => {
+              showAppAlert(
+                "Could not delete",
+                err instanceof Error ? err.message : "Try again",
+              );
             },
-          },
-        ],
-      );
+          });
+        },
+      });
     },
     [deleteCategory],
   );
@@ -121,7 +179,7 @@ export function WalletScreen() {
   if (!wedding) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
-        <ScreenEmpty description="Set up your wedding on the web app to track your budget." />
+        <ScreenEmpty description="Finish setting up your wedding to track your budget." />
       </View>
     );
   }
@@ -139,9 +197,23 @@ export function WalletScreen() {
         <View style={styles.headerTop}>
           <View style={styles.headerText}>
             <Text style={styles.eyebrow}>ShadiPlan</Text>
-            <Text style={styles.title}>Wallet</Text>
+            <AnimatedScreenTitle style={styles.title}>Wallet</AnimatedScreenTitle>
           </View>
-          <DrawerMenuButton />
+          <View style={styles.headerActions}>
+            <AppPressable
+              onPress={toggleAmountsHidden}
+              style={styles.eyeBtn}
+              accessibilityRole="button"
+              accessibilityLabel={amountsHidden ? "Show amounts" : "Hide amounts"}
+            >
+              {amountsHidden ? (
+                <EyeOff size={20} color={colors.foreground} />
+              ) : (
+                <Eye size={20} color={colors.foreground} />
+              )}
+            </AppPressable>
+            <DrawerMenuButton />
+          </View>
         </View>
       </View>
 
@@ -157,20 +229,24 @@ export function WalletScreen() {
           {hasBudget ? (
             <>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryAmount}>{formatINR(totalSpent)}</Text>
-                <Text style={styles.summaryOf}>of {formatINR(wedding.totalBudget!)}</Text>
+                <AmountText value={totalSpent} style={styles.summaryAmount} />
+                <Text style={styles.summaryOf}>
+                  of <AmountText value={wedding.totalBudget!} style={styles.summaryOf} />
+                </Text>
               </View>
               <View style={styles.progressTrack}>
                 <View style={[styles.progressFill, { width: `${budgetPct}%` }]} />
               </View>
               <View style={styles.summaryMeta}>
                 <Text style={styles.summaryMetaText}>{budgetPct}% committed</Text>
-                <Text style={styles.summaryMetaText}>Planned {formatINR(totalPlanned)}</Text>
+                <Text style={styles.summaryMetaText}>
+                  Planned <AmountText value={totalPlanned} style={styles.summaryMetaText} />
+                </Text>
               </View>
             </>
           ) : (
             <>
-              <Text style={styles.summaryAmount}>{formatINR(totalSpent)}</Text>
+              <AmountText value={totalSpent} style={styles.summaryAmount} />
               <Text style={styles.setBudgetHint}>
                 Set your total budget to start tracking against a target.
               </Text>
@@ -180,6 +256,21 @@ export function WalletScreen() {
             </>
           )}
         </View>
+
+        {taggedTotals.length > 0 ? (
+          <View style={styles.taggedCard}>
+            <Text style={styles.sectionTitle}>Per person</Text>
+            <Text style={styles.taggedHint}>
+              Full amount counted for each tag when an expense is shared.
+            </Text>
+            {taggedTotals.map(([tag, total]) => (
+              <View key={tag} style={styles.taggedRow}>
+                <Text style={styles.taggedLabel}>{tag}</Text>
+                <AmountText value={total} style={styles.taggedAmount} />
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Categories</Text>
@@ -211,18 +302,43 @@ export function WalletScreen() {
           )}
         </View>
 
-        <Text style={[styles.sectionTitle, styles.transactionsTitle]}>Recent transactions</Text>
+        <View style={styles.txHeader}>
+          <Text style={styles.sectionTitle}>Transactions</Text>
+          <AppSelect
+            value={txSort}
+            onSelect={setTxSort}
+            options={SORT_OPTIONS}
+            containerStyle={styles.sortSelect}
+          />
+        </View>
+
         <View style={styles.listCard}>
           {transactions.length === 0 ? (
             <View style={styles.emptyBlock}>
               <Text style={styles.emptyText}>No transactions yet. Tap + to log an expense.</Text>
             </View>
+          ) : txSort === "category" && transactionsByCategory ? (
+            transactionsByCategory.map(([categoryName, txs]) => (
+              <View key={categoryName}>
+                <View style={styles.categoryHeader}>
+                  <Text style={styles.categoryHeaderText}>{categoryName}</Text>
+                </View>
+                {txs.map((tx, i) => (
+                  <TransactionRow
+                    key={tx.id}
+                    transaction={tx}
+                    isLast={i === txs.length - 1}
+                    onPress={() => setSelectedTransaction(tx)}
+                  />
+                ))}
+              </View>
+            ))
           ) : (
-            transactions.map((tx, i) => (
+            sortedTransactions.map((tx, i) => (
               <TransactionRow
                 key={tx.id}
                 transaction={tx}
-                isLast={i === transactions.length - 1}
+                isLast={i === sortedTransactions.length - 1}
                 onPress={() => setSelectedTransaction(tx)}
               />
             ))
@@ -288,12 +404,14 @@ function CategoryRow({
         <View style={styles.listRowTop}>
           <Text style={styles.listRowTitle}>{category.name}</Text>
           <View style={styles.listRowRight}>
-            <Text style={styles.listRowAmount}>
-              <Text style={[styles.listRowActual, over && styles.overBudget]}>
-                {formatINR(category.actual)}
-              </Text>
-              <Text style={styles.listRowPlanned}> / {formatINR(category.planned)}</Text>
-            </Text>
+            <View style={styles.listRowAmount}>
+              <AmountText
+                value={category.actual}
+                style={[styles.listRowActual, over && styles.overBudget]}
+              />
+              <Text style={styles.listRowPlanned}> / </Text>
+              <AmountText value={category.planned} style={styles.listRowPlanned} />
+            </View>
             <AppPressable
               onPress={onDelete}
               style={styles.trashBtn}
@@ -357,7 +475,7 @@ function TransactionRow({
         ) : null}
       </View>
       <View style={styles.txRight}>
-        <Text style={styles.txAmount}>{formatINR(transaction.amount)}</Text>
+        <AmountText value={transaction.amount} style={styles.txAmount} />
         <Text style={styles.txDate}>{shortDate(transaction.date)}</Text>
       </View>
     </AppPressable>
@@ -382,6 +500,14 @@ const styles = StyleSheet.create({
   headerText: {
     flex: 1,
     minWidth: 0,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  eyeBtn: {
+    padding: 8,
   },
   eyebrow: {
     fontFamily: fonts.bodyMedium,
@@ -416,6 +542,7 @@ const styles = StyleSheet.create({
     alignItems: "baseline",
     gap: 8,
     marginTop: 8,
+    flexWrap: "wrap",
   },
   summaryAmount: {
     fontFamily: fonts.heading,
@@ -472,6 +599,39 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bodyMedium,
     fontSize: 14,
     color: colors.primary,
+  },
+  taggedCard: {
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginBottom: 24,
+  },
+  taggedHint: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.mutedForeground,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  taggedRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  taggedLabel: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    color: colors.foreground,
+  },
+  taggedAmount: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    color: colors.foreground,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -553,17 +713,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listRowAmount: {
-    fontFamily: fonts.body,
-    fontSize: 12,
+    flexDirection: "row",
+    alignItems: "center",
   },
   listRowActual: {
     fontFamily: fonts.bodyMedium,
+    fontSize: 12,
     color: colors.foreground,
   },
   overBudget: {
     color: colors.destructive,
   },
   listRowPlanned: {
+    fontFamily: fonts.body,
+    fontSize: 12,
     color: colors.mutedForeground,
   },
   listRowSub: {
@@ -587,9 +750,29 @@ const styles = StyleSheet.create({
   catProgressOver: {
     backgroundColor: colors.destructive,
   },
-  transactionsTitle: {
+  txHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     marginBottom: 8,
     paddingHorizontal: 4,
+  },
+  sortSelect: {
+    width: 140,
+    marginBottom: 0,
+  },
+  categoryHeader: {
+    backgroundColor: colors.secondary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  categoryHeaderText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 12,
+    color: colors.secondaryForeground,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   txRow: {
     flexDirection: "row",

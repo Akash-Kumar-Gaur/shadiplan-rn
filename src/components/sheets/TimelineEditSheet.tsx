@@ -1,13 +1,16 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Platform, Pressable, Text, View } from "react-native";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
+import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useDeleteTimelineEvent, useUpdateTimelineEvent } from "../../hooks/use-checklist-mutations";
 import type { TimelineEvent } from "../../lib/wedding-api";
 import { shortDate } from "../../lib/format";
 import { normalizeTimeForStorage } from "../../lib/time-utils";
-import { AppBottomSheet, SheetTextInput, formStyles } from "../AppBottomSheet";
+import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
+import { requestAppConfirm, showAppAlert } from "../ConfirmSheet";
+import { AppTextInput } from "../AppTextInput";
 import { TimePicker } from "../TimePicker";
 import { colors, fonts } from "../../theme/tokens";
 
@@ -58,6 +61,24 @@ export const TimelineEditSheet = forwardRef<BottomSheetModal, Props>(function Ti
     setShowDatePicker(false);
   }, [event]);
 
+  const formValues = useMemo(
+    () => ({ name, eventDate, time, venue, dressCode }),
+    [name, eventDate, time, venue, dressCode],
+  );
+
+  const baseline = useMemo(
+    () => ({
+      name: event?.name ?? "",
+      eventDate: event?.eventDate ?? "",
+      time: event?.time ?? "19:00",
+      venue: event?.venue ?? "",
+      dressCode: event?.dressCode ?? "",
+    }),
+    [event],
+  );
+
+  const isDirty = useFormDirty(formValues, baseline);
+
   const handleSave = async () => {
     if (!event) return;
     if (!name.trim()) {
@@ -90,24 +111,23 @@ export const TimelineEditSheet = forwardRef<BottomSheetModal, Props>(function Ti
 
   const handleDelete = () => {
     if (!event) return;
-    Alert.alert("Remove event?", `"${event.name}" and its songs will be removed.`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Remove",
-        style: "destructive",
-        onPress: () => {
-          deleteEvent.mutate(event.id, {
-            onSuccess: () => {
-              innerRef.current?.dismiss();
-              onClose();
-            },
-            onError: (err) => {
-              Alert.alert("Could not remove", err instanceof Error ? err.message : "Try again");
-            }
-});
-        }
-},
-    ]);
+    requestAppConfirm({
+      title: "Remove event?",
+      message: `"${event.name}" and its songs will be removed.`,
+      confirmLabel: "Remove",
+      destructive: true,
+      onConfirm: () => {
+        deleteEvent.mutate(event.id, {
+          onSuccess: () => {
+            innerRef.current?.dismiss();
+            onClose();
+          },
+          onError: (err) => {
+            showAppAlert("Could not remove", err instanceof Error ? err.message : "Try again");
+          },
+        });
+      },
+    });
   };
 
   if (!event) return null;
@@ -115,22 +135,21 @@ export const TimelineEditSheet = forwardRef<BottomSheetModal, Props>(function Ti
   const saving = updateEvent.isPending;
 
   return (
-    <AppBottomSheet ref={innerRef} title="Edit timeline event" onDismiss={onClose}>
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Event name</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          placeholder="e.g. Sangeet"
-          value={name}
-          onChangeText={setName}
-        />
-      </View>
+    <AppBottomSheet ref={innerRef} title="Edit timeline event" isDirty={isDirty} onDismiss={onClose}>
+      <AppTextInput
+        label="Event name"
+        placeholder="e.g. Sangeet"
+        value={name}
+        onChangeText={setName}
+      />
 
       <View style={formStyles.field}>
         <Text style={formStyles.label}>Date</Text>
-        <Pressable onPress={() => setShowDatePicker(true)}>
-          <Text style={formStyles.input}>{eventDate ? shortDate(eventDate) : "Pick date"}</Text>
-        </Pressable>
+        <AppPressable style={formStyles.input} onPress={() => setShowDatePicker(true)}>
+          <Text style={{ color: eventDate ? colors.charcoal : colors.textMuted, fontSize: 15 }}>
+            {eventDate ? shortDate(eventDate) : "Pick date"}
+          </Text>
+        </AppPressable>
         {showDatePicker ? (
           <DateTimePicker
             value={eventDate ? parseIsoDate(eventDate) : new Date()}
@@ -154,25 +173,19 @@ export const TimelineEditSheet = forwardRef<BottomSheetModal, Props>(function Ti
         <TimePicker value={time} onChange={setTime} />
       </View>
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Venue</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          placeholder="Venue name"
-          value={venue}
-          onChangeText={setVenue}
-        />
-      </View>
+      <AppTextInput
+        label="Venue"
+        placeholder="Venue name"
+        value={venue}
+        onChangeText={setVenue}
+      />
 
-      <View style={formStyles.field}>
-        <Text style={formStyles.label}>Dress code</Text>
-        <SheetTextInput
-          style={formStyles.input}
-          placeholder="e.g. Traditional"
-          value={dressCode}
-          onChangeText={setDressCode}
-        />
-      </View>
+      <AppTextInput
+        label="Dress code"
+        placeholder="e.g. Traditional"
+        value={dressCode}
+        onChangeText={setDressCode}
+      />
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
 
