@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { StyleSheet, type StyleProp, type TextStyle } from "react-native";
 import Animated, {
+  Easing,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -24,8 +25,9 @@ export function AnimatedScreenTitle({ children, style, delay = 40 }: Props) {
   const translateY = useSharedValue(10);
 
   useEffect(() => {
-    opacity.value = withDelay(delay, withTiming(1, { duration: 220 }));
-    translateY.value = withDelay(delay, withTiming(0, { duration: 240 }));
+    const ease = Easing.out(Easing.cubic);
+    opacity.value = withDelay(delay, withTiming(1, { duration: 220, easing: ease }));
+    translateY.value = withDelay(delay, withTiming(0, { duration: 240, easing: ease }));
   }, [delay, opacity, translateY]);
 
   const animatedStyle = useAnimatedStyle(() => ({

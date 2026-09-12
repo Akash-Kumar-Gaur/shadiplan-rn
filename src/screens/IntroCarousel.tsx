@@ -1,62 +1,108 @@
-import { useEffect, useRef, useState, type ComponentType } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { DotLottie, type Dotlottie } from "@lottiefiles/dotlottie-react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Image, StyleSheet, Text, View } from "react-native";
 import PagerView from "react-native-pager-view";
 import Animated, {
+  Easing,
   Extrapolation,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withSpring,
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
-import type { SvgProps } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MandalaRing } from "../assets/onboarding/MandalaRing";
-import { Slide1Illustration } from "../assets/onboarding/Slide1Illustration";
-import { Slide2Illustration } from "../assets/onboarding/Slide2Illustration";
-import { Slide3Illustration } from "../assets/onboarding/Slide3Illustration";
-import { Slide4Illustration } from "../assets/onboarding/Slide4Illustration";
 import { AppPressable } from "../components/AppPressable";
 import { usePagerScrollHandler } from "../hooks/use-pager-scroll-handler";
+import { isDotLottieAvailable } from "../lib/dotlottie-available";
 import { markIntroSeen } from "../lib/intro-storage";
 import { colors, fonts, radius, spacing } from "../theme/tokens";
 
 const AnimatedPagerView = Animated.createAnimatedComponent(PagerView);
 
+const easeOut = Easing.out(Easing.cubic);
+
 type SlideData = {
   title: string;
   description: string;
-  Illustration: ComponentType<SvgProps>;
+  /** Static require under /assets — same pattern as login envelope. */
+  lottie: number;
 };
 
 const SLIDES: SlideData[] = [
   {
-    title: "Plan your way",
+    title: "Plan it your way",
     description:
-      "Add everything yourself, or get AI-assisted checklist suggestions — your choice from the start.",
-    Illustration: Slide1Illustration,
+      "A full head start, or a blank page to fill in yourself — however you like to plan.",
+    lottie: require("../../assets/onboarding/slide1.lottie"),
   },
   {
-    title: "Vendors & budget, organized",
+    title: "Every rupee, in its place",
     description:
-      "Track payments, due dates, and real spending in one place — no more scattered notes.",
-    Illustration: Slide2Illustration,
+      "Vendors, payments, and budgets — tracked without a single spreadsheet.",
+    lottie: require("../../assets/onboarding/slide2.lottie"),
   },
   {
-    title: "Guests, without the spreadsheet",
+    title: "Every guest, remembered",
     description:
-      "RSVPs, meal preferences, and real headcounts including plus-ones — all in one list.",
-    Illustration: Slide3Illustration,
+      "RSVPs, meals, plus-ones — know exactly who's coming, and what they need.",
+    lottie: require("../../assets/onboarding/slide3.lottie"),
   },
   {
-    title: "Invites that look like you sent them",
+    title: "An invitation worthy of the day",
     description:
-      "Themed, shareable invites for specific events — straight to WhatsApp when you're ready.",
-    Illustration: Slide4Illustration,
+      "Pick a theme, choose the moments to share, and send something as considered as the occasion itself.",
+    lottie: require("../../assets/onboarding/slide4.lottie"),
   },
 ];
+
+function IntroSlideLottie({
+  source,
+  isActive,
+}: {
+  source: number;
+  isActive: boolean;
+}) {
+  const ref = useRef<Dotlottie>(null);
+  const resolved = useMemo(() => Image.resolveAssetSource(source), [source]);
+
+  useEffect(() => {
+    if (!isDotLottieAvailable || !isActive) return;
+    // Native view mounts async — nudge play after layout.
+    const t = setTimeout(() => ref.current?.play(), 50);
+    return () => clearTimeout(t);
+  }, [isActive]);
+
+  if (!isDotLottieAvailable) {
+    return <View style={styles.lottieFallback} />;
+  }
+
+  // Only mount the active slide's player — multiple DotLottie surfaces inside
+  // PagerView often render blank in Android release builds.
+  if (!isActive) {
+    return <View style={styles.lottie} />;
+  }
+
+  if (!resolved?.uri) {
+    console.warn("[intro] could not resolve lottie asset", source);
+    return <View style={styles.lottieFallback} />;
+  }
+
+  return (
+    <DotLottie
+      ref={ref}
+      source={{ uri: resolved.uri }}
+      style={styles.lottie}
+      loop
+      autoplay
+      onLoadError={() => {
+        console.error("[intro] DotLottie failed to load", resolved.uri);
+      }}
+    />
+  );
+}
 
 function IntroSlide({
   slide,
@@ -69,8 +115,6 @@ function IntroSlide({
   scrollOffset: SharedValue<number>;
   isActive: boolean;
 }) {
-  const Illustration = slide.Illustration;
-
   const titleTranslateY = useSharedValue(20);
   const titleOpacity = useSharedValue(0);
   const descTranslateY = useSharedValue(16);
@@ -78,10 +122,22 @@ function IntroSlide({
 
   useEffect(() => {
     if (isActive) {
-      titleTranslateY.value = withDelay(150, withSpring(0, { damping: 14 }));
-      titleOpacity.value = withDelay(150, withTiming(1, { duration: 350 }));
-      descTranslateY.value = withDelay(250, withSpring(0, { damping: 14 }));
-      descOpacity.value = withDelay(250, withTiming(1, { duration: 380 }));
+      titleTranslateY.value = withDelay(
+        150,
+        withTiming(0, { duration: 400, easing: easeOut }),
+      );
+      titleOpacity.value = withDelay(
+        150,
+        withTiming(1, { duration: 400, easing: easeOut }),
+      );
+      descTranslateY.value = withDelay(
+        250,
+        withTiming(0, { duration: 400, easing: easeOut }),
+      );
+      descOpacity.value = withDelay(
+        250,
+        withTiming(1, { duration: 400, easing: easeOut }),
+      );
     } else {
       titleTranslateY.value = 20;
       titleOpacity.value = 0;
@@ -101,6 +157,9 @@ function IntroSlide({
     return { transform: [{ translateX }] };
   });
 
+  // Do NOT animate opacity on the DotLottie wrapper — on Android release,
+  // opacity on a parent of DotLottie's native surface often makes it invisible
+  // even when the value is 1.
   const illustrationStyle = useAnimatedStyle(() => {
     const inputRange = [index - 1, index, index + 1];
     const translateX = interpolate(
@@ -112,16 +171,10 @@ function IntroSlide({
     const scale = interpolate(
       scrollOffset.value,
       inputRange,
-      [0.85, 1, 0.85],
+      [0.92, 1, 0.92],
       Extrapolation.CLAMP,
     );
-    const opacity = interpolate(
-      scrollOffset.value,
-      inputRange,
-      [0.4, 1, 0.4],
-      Extrapolation.CLAMP,
-    );
-    return { transform: [{ translateX }, { scale }], opacity };
+    return { transform: [{ translateX }, { scale }] };
   });
 
   const titleStyle = useAnimatedStyle(() => ({
@@ -141,7 +194,7 @@ function IntroSlide({
       </Animated.View>
 
       <Animated.View style={[styles.illustrationLayer, illustrationStyle]}>
-        <Illustration width={240} height={240} />
+        <IntroSlideLottie source={slide.lottie} isActive={isActive} />
       </Animated.View>
 
       <View style={styles.textLayer}>
@@ -168,7 +221,7 @@ export function IntroCarousel({ onDone }: Props) {
   const onPageScroll = usePagerScrollHandler({
     onPageScroll: (e) => {
       "worklet";
-      scrollOffset.value = e.position + e.offset;
+      scrollOffset.value = (e.position ?? 0) + (e.offset ?? 0);
     },
   });
 
@@ -197,7 +250,7 @@ export function IntroCarousel({ onDone }: Props) {
         onPageSelected={(e) => setPage(e.nativeEvent.position)}
       >
         {SLIDES.map((slide, i) => (
-          <View key={slide.title} collapsable={false}>
+          <View key={slide.title} collapsable={false} style={styles.page}>
             <IntroSlide
               slide={slide}
               index={i}
@@ -236,6 +289,9 @@ const styles = StyleSheet.create({
   pager: {
     flex: 1,
   },
+  page: {
+    flex: 1,
+  },
   slideContainer: {
     flex: 1,
     alignItems: "center",
@@ -253,6 +309,20 @@ const styles = StyleSheet.create({
   illustrationLayer: {
     marginBottom: 28,
     zIndex: 1,
+    width: 220,
+    height: 220,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lottie: {
+    width: 220,
+    height: 220,
+  },
+  lottieFallback: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: colors.secondary,
   },
   textLayer: {
     alignItems: "center",

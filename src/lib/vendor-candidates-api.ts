@@ -184,6 +184,84 @@ function guessContentType(fileName: string): string {
   return "application/octet-stream";
 }
 
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+function storageObjectUrl(storagePath: string): string {
+  const baseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  if (!baseUrl) throw new Error("Supabase URL is not configured");
+  const encoded = storagePath.split("/").map(encodeURIComponent).join("/");
+  return `${baseUrl}/storage/v1/object/${BUCKET}/${encoded}`;
+}
+
+function uploadErrorFromBody(status: number, body: string): Error {
+  try {
+    const parsed = JSON.parse(body) as { message?: string; error?: string };
+    const msg = parsed.message ?? parsed.error;
+    if (msg) return new Error(msg);
+  } catch {
+    // Non-JSON body — fall through to the status message.
+  }
+  return new Error(`Upload failed (HTTP ${status})`);
+}
+
+/** The native uploader only reads `file://` paths, so copy SAF/asset URIs first. */
+async function ensureFileUri(localUri: string, fileName: string): Promise<string> {
+  if (localUri.startsWith("file://")) return localUri;
+  const FileSystem = await import("expo-file-system/legacy");
+  const cacheDir = FileSystem.cacheDirectory;
+  if (!cacheDir) throw new Error("No cache directory available");
+  const target = `${cacheDir}upload-${Date.now()}-${fileName}`;
+  await FileSystem.copyAsync({ from: localUri, to: target });
+  return target;
+}
+
+/**
+ * Streams the file from disk via the native uploader. Reading a multi-MB photo
+ * or PDF into JS (base64 → bytes) stalls or crashes Hermes, so the bytes must
+ * never cross the bridge.
+ */
+async function uploadLocalFileToStorage(
+  storagePath: string,
+  localUri: string,
+  fileName: string,
+  contentType: string,
+): Promise<void> {
+  const FileSystem = await import("expo-file-system/legacy");
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token || !anonKey) {
+    throw new Error("You are signed out — sign in again and retry");
+  }
+
+  const fileUri = await ensureFileUri(localUri, fileName);
+  const info = await FileSystem.getInfoAsync(fileUri);
+  if (!info.exists) throw new Error("File is no longer available on this device");
+  if (info.size === 0) throw new Error("File is empty");
+  if (info.size > MAX_UPLOAD_BYTES) {
+    throw new Error(
+      `File is too large (${Math.round(info.size / 1024 / 1024)}MB). Limit is ${MAX_UPLOAD_BYTES / 1024 / 1024}MB.`,
+    );
+  }
+
+  const result = await FileSystem.uploadAsync(storageObjectUrl(storagePath), fileUri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      apikey: anonKey,
+      "content-type": contentType,
+      "cache-control": "3600",
+      "x-upsert": "false",
+    },
+  });
+
+  if (result.status < 200 || result.status >= 300) {
+    throw uploadErrorFromBody(result.status, result.body ?? "");
+  }
+}
+
 export async function uploadCandidateFile(
   weddingId: string,
   candidateId: string,
@@ -194,13 +272,7 @@ export async function uploadCandidateFile(
   const storagePath = `${weddingId}/${candidateId}/${Date.now()}-${safeName}`;
   const contentType = guessContentType(safeName);
 
-  const response = await fetch(localUri);
-  const blob = await response.blob();
-
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, blob, { contentType, upsert: false });
-  if (uploadError) throw uploadError;
+  await uploadLocalFileToStorage(storagePath, localUri, safeName, contentType);
 
   const { data, error } = await supabase
     .from("vendor_candidate_files")
@@ -211,7 +283,11 @@ export async function uploadCandidateFile(
     })
     .select()
     .single();
-  if (error) throw error;
+  if (error) {
+    // Don't leave an object behind that nothing points at.
+    await supabase.storage.from(BUCKET).remove([storagePath]);
+    throw error;
+  }
   return mapFile(data as FileRow);
 }
 
@@ -222,6 +298,26 @@ export async function getCandidateFileSignedUrl(storagePath: string): Promise<st
   if (error) throw error;
   if (!data?.signedUrl) throw new Error("Could not create signed URL");
   return data.signedUrl;
+}
+
+/** Download a private candidate file to the device cache (needed for Sharing / local preview). */
+export async function downloadCandidateFileToCache(
+  file: VendorCandidateFile,
+): Promise<{ uri: string; mimeType: string }> {
+  const signedUrl = await getCandidateFileSignedUrl(file.storagePath);
+  const FileSystem = await import("expo-file-system/legacy");
+  const cacheDir = FileSystem.cacheDirectory;
+  if (!cacheDir) throw new Error("No cache directory available");
+
+  const safeName = (file.fileName ?? "document").replace(/[^\w.\-()+ ]+/g, "_");
+  const target = `${cacheDir}vendor-doc-${file.id}-${safeName}`;
+  const result = await FileSystem.downloadAsync(signedUrl, target);
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Download failed (HTTP ${result.status})`);
+  }
+
+  const mimeType = guessContentType(safeName);
+  return { uri: result.uri, mimeType };
 }
 
 export async function deleteCandidateFile(file: VendorCandidateFile): Promise<void> {

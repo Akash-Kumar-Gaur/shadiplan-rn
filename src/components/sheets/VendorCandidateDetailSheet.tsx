@@ -1,25 +1,28 @@
 import type { BottomSheetModal } from "@gorhom/bottom-sheet";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import * as Sharing from "expo-sharing";
+import * as WebBrowser from "expo-web-browser";
 import {
   CheckCircle2,
   FileText,
   FilePlus,
   Image as ImageIcon,
   ImagePlus,
+  Trash2,
   XCircle,
 } from "lucide-react-native";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  Linking,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { WebView } from "react-native-webview";
 import {
   useDeleteCandidateFile,
   usePromoteCandidate,
@@ -27,6 +30,7 @@ import {
   useUploadCandidateFile,
 } from "../../hooks/use-vendor-candidates";
 import {
+  downloadCandidateFileToCache,
   getCandidateFileSignedUrl,
   isImageFileName,
 } from "../../lib/vendor-candidates-api";
@@ -43,8 +47,24 @@ type Props = {
   onClose: () => void;
 };
 
+type FilePreview = {
+  uri: string;
+  kind: "image" | "document";
+  title: string;
+};
+
+function errorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (err && typeof err === "object" && "message" in err) {
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === "string" && msg.trim()) return msg;
+  }
+  return fallback;
+}
+
 export const VendorCandidateDetailSheet = forwardRef<BottomSheetModal, Props>(
   function VendorCandidateDetailSheet({ candidate, weddingId, onClose }, ref) {
+    const insets = useSafeAreaInsets();
     const innerRef = useRef<BottomSheetModal>(null);
     useImperativeHandle(ref, () => innerRef.current!);
 
@@ -53,33 +73,40 @@ export const VendorCandidateDetailSheet = forwardRef<BottomSheetModal, Props>(
     const uploadFile = useUploadCandidateFile(weddingId);
     const deleteFile = useDeleteCandidateFile(weddingId);
 
-    const [previewUri, setPreviewUri] = useState<string | null>(null);
+    const [preview, setPreview] = useState<FilePreview | null>(null);
+    const [opening, setOpening] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
       setError(null);
-      setPreviewUri(null);
+      setPreview(null);
     }, [candidate?.id]);
 
     const openFile = async (file: VendorCandidateFile) => {
+      setOpening(true);
       try {
-        const url = await getCandidateFileSignedUrl(file.storagePath);
+        const title = file.fileName ?? "Document";
+
         if (isImageFileName(file.fileName)) {
-          setPreviewUri(url);
+          const { uri } = await downloadCandidateFileToCache(file);
+          setPreview({ uri, kind: "image", title });
           return;
         }
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(url, {
-            mimeType: "application/pdf",
-            dialogTitle: file.fileName ?? "Document",
-          });
+
+        // Direct view — never use the share sheet.
+        const url = await getCandidateFileSignedUrl(file.storagePath);
+        if (Platform.OS === "android") {
+          // Android WebView doesn't render PDFs; Custom Tabs / browser does.
+          await WebBrowser.openBrowserAsync(url);
         } else {
-          await Linking.openURL(url);
+          setPreview({ uri: url, kind: "document", title });
         }
       } catch (err) {
-        showAppAlert("Could not open file", err instanceof Error ? err.message : "Try again");
+        console.error("[vendor-candidates] open file failed:", err);
+        showAppAlert("Could not open file", errorMessage(err, "Try again"));
+      } finally {
+        setOpening(false);
       }
     };
 
@@ -104,7 +131,8 @@ export const VendorCandidateDetailSheet = forwardRef<BottomSheetModal, Props>(
           fileName: asset.fileName ?? `estimate-${Date.now()}.jpg`,
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Upload failed");
+        console.error("[vendor-candidates] upload photo failed:", err);
+        setError(errorMessage(err, "Upload failed"));
       } finally {
         setBusy(false);
       }
@@ -126,7 +154,8 @@ export const VendorCandidateDetailSheet = forwardRef<BottomSheetModal, Props>(
           fileName: asset.name,
         });
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Upload failed");
+        console.error("[vendor-candidates] upload document failed:", err);
+        setError(errorMessage(err, "Upload failed"));
       } finally {
         setBusy(false);
       }
@@ -205,37 +234,52 @@ export const VendorCandidateDetailSheet = forwardRef<BottomSheetModal, Props>(
           </View>
 
           <Text style={styles.sectionTitle}>Documents</Text>
-          <View style={styles.docCard}>
-            {candidate.files.length === 0 ? (
+          {candidate.files.length === 0 ? (
+            <View style={styles.docCard}>
               <Text style={styles.empty}>No documents yet</Text>
-            ) : (
-              candidate.files.map((file) => (
-                <AppPressable
-                  key={file.id}
-                  onPress={() => void openFile(file)}
-                  onLongPress={() => {
-                    requestAppConfirm({
-                      title: "Remove document?",
-                      message: file.fileName ?? "This file",
-                      confirmLabel: "Remove",
-                      destructive: true,
-                      onConfirm: () => void deleteFile.mutateAsync(file),
-                    });
-                  }}
-                  style={styles.docRow}
-                >
-                  {isImageFileName(file.fileName) ? (
-                    <ImageIcon size={18} color={colors.primary} />
-                  ) : (
-                    <FileText size={18} color={colors.primary} />
-                  )}
-                  <Text style={styles.docName} numberOfLines={1}>
-                    {file.fileName ?? "Document"}
-                  </Text>
-                </AppPressable>
-              ))
-            )}
-          </View>
+            </View>
+          ) : (
+            <View style={styles.docList}>
+              {candidate.files.map((file) => (
+                <View key={file.id} style={styles.docItem}>
+                  <AppPressable
+                    onPress={() => void openFile(file)}
+                    style={styles.docCard}
+                    accessibilityLabel={`Open ${file.fileName ?? "document"}`}
+                  >
+                    <View style={styles.docOpen}>
+                      {isImageFileName(file.fileName) ? (
+                        <ImageIcon size={18} color={colors.primary} />
+                      ) : (
+                        <FileText size={18} color={colors.primary} />
+                      )}
+                      <Text style={styles.docName} numberOfLines={1}>
+                        {file.fileName ?? "Document"}
+                      </Text>
+                    </View>
+                  </AppPressable>
+                  {considering ? (
+                    <AppPressable
+                      onPress={() => {
+                        requestAppConfirm({
+                          title: "Remove document?",
+                          message: file.fileName ?? "This file",
+                          confirmLabel: "Remove",
+                          destructive: true,
+                          onConfirm: () => void deleteFile.mutateAsync(file),
+                        });
+                      }}
+                      style={styles.docRemoveOutside}
+                      accessibilityLabel={`Remove ${file.fileName ?? "document"}`}
+                    >
+                      <Trash2 size={14} color={colors.destructive} />
+                      <Text style={styles.docRemoveText}>Remove</Text>
+                    </AppPressable>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          )}
 
           {considering ? (
             <View style={{ flexDirection: "row", gap: 8 }}>
@@ -292,16 +336,42 @@ export const VendorCandidateDetailSheet = forwardRef<BottomSheetModal, Props>(
           )}
         </AppBottomSheet>
 
-        <Modal visible={!!previewUri} transparent animationType="fade">
-          <View style={styles.previewBackdrop}>
-            <AppPressable onPress={() => setPreviewUri(null)} style={styles.previewClose}>
-              <Text style={styles.previewCloseText}>Close</Text>
-            </AppPressable>
-            {previewUri ? (
-              <Image source={{ uri: previewUri }} style={styles.previewImage} resizeMode="contain" />
+        <Modal
+          visible={!!preview}
+          animationType="fade"
+          onRequestClose={() => setPreview(null)}
+        >
+          <View style={[styles.previewRoot, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+            <View style={styles.previewHeader}>
+              <Text style={styles.previewTitle} numberOfLines={1}>
+                {preview?.title ?? "Document"}
+              </Text>
+              <AppPressable onPress={() => setPreview(null)} style={styles.previewClose}>
+                <Text style={styles.previewCloseText}>Close</Text>
+              </AppPressable>
+            </View>
+            {preview?.kind === "image" ? (
+              <Image source={{ uri: preview.uri }} style={styles.previewImage} resizeMode="contain" />
+            ) : preview ? (
+              <WebView
+                source={{ uri: preview.uri }}
+                style={styles.previewWeb}
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={styles.previewLoading}>
+                    <ActivityIndicator color={colors.terracottaDark} />
+                  </View>
+                )}
+              />
             ) : null}
           </View>
         </Modal>
+
+        {opening ? (
+          <View style={styles.openingOverlay} pointerEvents="none">
+            <ActivityIndicator color={colors.terracottaDark} />
+          </View>
+        ) : null}
       </>
     );
   },
@@ -353,12 +423,18 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 8,
   },
+  docList: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  docItem: {
+    gap: 6,
+  },
   docCard: {
     backgroundColor: "#fff",
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 16,
     overflow: "hidden",
   },
   empty: {
@@ -368,20 +444,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.mutedForeground,
   },
-  docRow: {
+  docOpen: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: 14,
+    minWidth: 0,
   },
   docName: {
     flex: 1,
     fontFamily: fonts.bodyMedium,
     fontSize: 14,
     color: colors.foreground,
+  },
+  docRemoveOutside: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginLeft: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  docRemoveText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.destructive,
   },
   btnRow: {
     flexDirection: "row",
@@ -395,26 +484,52 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     textAlign: "center",
   },
-  previewBackdrop: {
+  previewRoot: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)",
-    justifyContent: "center",
-    padding: 16,
+    backgroundColor: "#111",
+  },
+  previewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.15)",
+  },
+  previewTitle: {
+    flex: 1,
+    color: "#fff",
+    fontFamily: fonts.bodyMedium,
+    fontSize: 15,
   },
   previewClose: {
-    position: "absolute",
-    top: 56,
-    right: 20,
-    zIndex: 2,
-    padding: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
   },
   previewCloseText: {
-    color: "#fff",
+    color: colors.gold,
     fontFamily: fonts.bodyMedium,
     fontSize: 16,
   },
   previewImage: {
+    flex: 1,
     width: "100%",
-    height: "80%",
+  },
+  previewWeb: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  previewLoading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+  },
+  openingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(251,247,240,0.35)",
   },
 });
