@@ -57,3 +57,14 @@ yarn-error.*
 
 # generated iOS (regenerate with prebuild when needed)
 /ios
+.env.supabase.backup
+shadiplan_backup.dump
+neon.ts
+*.dump
+Claude outputs/
+.env.local
+.env.supabase.backup
+shadiplan_backup.dump  
+neon.ts
+*.dump
+Claude outputs/
