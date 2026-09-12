@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { shadowWrite, useNeonBackend } from "./supabase-dual-write";
 
 export type OutfitPlan = {
   id: string;
@@ -83,28 +84,38 @@ export async function upsertOutfitPlan(
   weddingId: string,
   input: UpsertOutfitPlanInput,
 ): Promise<OutfitPlan> {
+  const outfitData = {
+    wedding_id: weddingId,
+    timeline_event_id: input.timelineEventId,
+    person: input.person.trim(),
+    outfit_description: input.outfitDescription?.trim() || null,
+    color: input.color?.trim() || null,
+    jeweller_or_designer: input.jewellerOrDesigner?.trim() || null,
+    notes: input.notes?.trim() || null,
+  };
+
   const { data, error } = await supabase
     .from("outfit_plans")
-    .upsert(
-      {
-        wedding_id: weddingId,
-        timeline_event_id: input.timelineEventId,
-        person: input.person.trim(),
-        outfit_description: input.outfitDescription?.trim() || null,
-        color: input.color?.trim() || null,
-        jeweller_or_designer: input.jewellerOrDesigner?.trim() || null,
-        notes: input.notes?.trim() || null,
-      },
-      { onConflict: "wedding_id,timeline_event_id,person" },
-    )
+    .upsert(outfitData, { onConflict: "wedding_id,timeline_event_id,person" })
     .select()
     .single();
 
   if (error) throw error;
+
+  // Shadow write to Supabase (upsert mode)
+  if (useNeonBackend) {
+    shadowWrite("outfit_plans", "insert", { data: { ...outfitData, id: data.id } });
+  }
+
   return mapOutfit(data as OutfitPlanRow);
 }
 
 export async function deleteOutfitPlan(id: string): Promise<void> {
   const { error } = await supabase.from("outfit_plans").delete().eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("outfit_plans", "delete", { id });
+  }
 }

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { shadowWrite, useNeonBackend } from "./supabase-dual-write";
 import type {
   BudgetCategory,
   CreateExpenseInput,
@@ -134,22 +135,30 @@ export async function insertTransaction(
   weddingId: string,
   input: CreateExpenseInput,
 ): Promise<Transaction> {
+  const txData = {
+    wedding_id: weddingId,
+    vendor_id: null,
+    vendor_name: input.vendorName?.trim() || "Expense",
+    category_id: input.categoryId,
+    amount: input.amount,
+    paid_date: input.date,
+    note: input.note ?? null,
+    tagged_for: input.taggedFor?.length ? input.taggedFor : [],
+  };
+
   const { data, error } = await supabase
     .from("transactions")
-    .insert({
-      wedding_id: weddingId,
-      vendor_id: null,
-      vendor_name: input.vendorName?.trim() || "Expense",
-      category_id: input.categoryId,
-      amount: input.amount,
-      paid_date: input.date,
-      note: input.note ?? null,
-      tagged_for: input.taggedFor?.length ? input.taggedFor : [],
-    })
+    .insert(txData)
     .select()
     .single();
 
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("transactions", "insert", { data: { ...txData, id: data.id } });
+  }
+
   return mapTransaction(data as TransactionRow);
 }
 
@@ -210,6 +219,11 @@ export async function updateTransaction(
       .eq("wedding_id", weddingId)
       .eq("id", id);
     if (txError) throw txError;
+
+    // Shadow write to Supabase
+    if (useNeonBackend) {
+      shadowWrite("transactions", "update", { id, data: txPayload });
+    }
   }
 
   if (existing.vendor_id) {
@@ -224,6 +238,11 @@ export async function updateTransaction(
         .update(paymentPayload)
         .eq("id", id);
       if (paymentError) throw paymentError;
+
+      // Shadow write to Supabase
+      if (useNeonBackend) {
+        shadowWrite("vendor_payments", "update", { id, data: paymentPayload });
+      }
     }
 
     await syncVendorAdvanceFromPayments(existing.vendor_id);
@@ -246,12 +265,23 @@ export async function deleteTransaction(weddingId: string, id: string): Promise<
     .eq("id", id);
   if (txError) throw txError;
 
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("transactions", "delete", { id });
+  }
+
   if (existing.vendor_id) {
     const { error: paymentError } = await supabase
       .from("vendor_payments")
       .delete()
       .eq("id", id);
     if (paymentError) throw paymentError;
+
+    // Shadow write to Supabase
+    if (useNeonBackend) {
+      shadowWrite("vendor_payments", "delete", { id });
+    }
+
     await syncVendorAdvanceFromPayments(existing.vendor_id);
   }
 }
@@ -260,18 +290,26 @@ export async function insertBudgetCategory(
   weddingId: string,
   input: { name: string; planned?: number },
 ): Promise<BudgetCategory> {
+  const categoryData = {
+    wedding_id: weddingId,
+    name: input.name.trim(),
+    planned: input.planned ?? 0,
+    actual: 0,
+  };
+
   const { data, error } = await supabase
     .from("budget_categories")
-    .insert({
-      wedding_id: weddingId,
-      name: input.name.trim(),
-      planned: input.planned ?? 0,
-      actual: 0,
-    })
+    .insert(categoryData)
     .select()
     .single();
 
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("budget_categories", "insert", { data: { ...categoryData, id: data.id } });
+  }
+
   return {
     id: data.id,
     name: data.name,
@@ -285,16 +323,23 @@ export async function updateBudgetCategory(
   id: string,
   updates: { name: string; planned: number },
 ): Promise<void> {
+  const payload = {
+    name: updates.name.trim(),
+    planned: updates.planned,
+  };
+
   const { error } = await supabase
     .from("budget_categories")
-    .update({
-      name: updates.name.trim(),
-      planned: updates.planned,
-    })
+    .update(payload)
     .eq("wedding_id", weddingId)
     .eq("id", id);
 
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("budget_categories", "update", { id, data: payload });
+  }
 }
 
 /** Deletes category; transactions.category_id is ON DELETE SET NULL (uncategorized). */
@@ -306,6 +351,11 @@ export async function deleteBudgetCategory(weddingId: string, id: string): Promi
     .eq("id", id);
 
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("budget_categories", "delete", { id });
+  }
 }
 
 export async function seedDefaultBudgetCategories(weddingId: string): Promise<void> {

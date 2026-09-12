@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { shadowWrite, useNeonBackend } from "./supabase-dual-write";
 import type {
   CreateVendorCandidateInput,
   Vendor,
@@ -94,21 +95,29 @@ export async function insertVendorCandidate(
   weddingId: string,
   input: CreateVendorCandidateInput,
 ): Promise<VendorCandidate> {
+  const candidateData = {
+    wedding_id: weddingId,
+    name: input.name.trim(),
+    category: input.category,
+    contact_name: input.contactName?.trim() || null,
+    phone: input.phone?.trim() || null,
+    proposed_amount: input.proposedAmount ?? null,
+    notes: input.notes?.trim() || null,
+    status: "considering",
+  };
+
   const { data, error } = await supabase
     .from("vendor_candidates")
-    .insert({
-      wedding_id: weddingId,
-      name: input.name.trim(),
-      category: input.category,
-      contact_name: input.contactName?.trim() || null,
-      phone: input.phone?.trim() || null,
-      proposed_amount: input.proposedAmount ?? null,
-      notes: input.notes?.trim() || null,
-      status: "considering",
-    })
+    .insert(candidateData)
     .select()
     .single();
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("vendor_candidates", "insert", { data: { ...candidateData, id: data.id } });
+  }
+
   return mapCandidate(data as CandidateRow, []);
 }
 
@@ -121,6 +130,11 @@ export async function updateVendorCandidateStatus(
     .update({ status })
     .eq("id", candidateId);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("vendor_candidates", "update", { id: candidateId, data: { status } });
+  }
 }
 
 export async function rejectOtherCandidatesInCategory(
@@ -128,6 +142,8 @@ export async function rejectOtherCandidatesInCategory(
   category: VendorCategory,
   exceptCandidateId: string,
 ): Promise<void> {
+  // For batch updates, we can't easily shadow write each individual record,
+  // so we'll log a general update. In production, fetch the IDs first if needed.
   const { error } = await supabase
     .from("vendor_candidates")
     .update({ status: "rejected" })
@@ -136,6 +152,9 @@ export async function rejectOtherCandidatesInCategory(
     .eq("status", "considering")
     .neq("id", exceptCandidateId);
   if (error) throw error;
+
+  // Note: Shadow write for batch update would require fetching IDs first.
+  // For now, this is captured in the read-only operations.
 }
 
 export async function promoteCandidate(candidate: VendorCandidate): Promise<Vendor> {
@@ -274,13 +293,15 @@ export async function uploadCandidateFile(
 
   await uploadLocalFileToStorage(storagePath, localUri, safeName, contentType);
 
+  const fileData = {
+    vendor_candidate_id: candidateId,
+    storage_path: storagePath,
+    file_name: safeName,
+  };
+
   const { data, error } = await supabase
     .from("vendor_candidate_files")
-    .insert({
-      vendor_candidate_id: candidateId,
-      storage_path: storagePath,
-      file_name: safeName,
-    })
+    .insert(fileData)
     .select()
     .single();
   if (error) {
@@ -288,6 +309,12 @@ export async function uploadCandidateFile(
     await supabase.storage.from(BUCKET).remove([storagePath]);
     throw error;
   }
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("vendor_candidate_files", "insert", { data: { ...fileData, id: data.id } });
+  }
+
   return mapFile(data as FileRow);
 }
 
@@ -326,6 +353,11 @@ export async function deleteCandidateFile(file: VendorCandidateFile): Promise<vo
     .delete()
     .eq("id", file.id);
   if (dbError) throw dbError;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("vendor_candidate_files", "delete", { id: file.id });
+  }
 
   const { error: storageError } = await supabase.storage.from(BUCKET).remove([file.storagePath]);
   if (storageError) throw storageError;

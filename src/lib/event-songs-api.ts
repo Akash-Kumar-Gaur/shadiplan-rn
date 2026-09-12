@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { shadowWrite, useNeonBackend } from "./supabase-dual-write";
 
 export type EventSong = {
   id: string;
@@ -88,20 +89,28 @@ export async function insertEventSong(
         ? Math.max(...existing.map((s) => s.orderIndex)) + 1
         : 0;
 
+  const songData = {
+    timeline_event_id: timelineEventId,
+    moment: input.moment.trim(),
+    song_name: input.songName.trim(),
+    artist: input.artist?.trim() || null,
+    link: input.link?.trim() || null,
+    order_index: orderIndex,
+  };
+
   const { data, error } = await supabase
     .from("event_songs")
-    .insert({
-      timeline_event_id: timelineEventId,
-      moment: input.moment.trim(),
-      song_name: input.songName.trim(),
-      artist: input.artist?.trim() || null,
-      link: input.link?.trim() || null,
-      order_index: orderIndex,
-    })
+    .insert(songData)
     .select()
     .single();
 
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("event_songs", "insert", { data: { ...songData, id: data.id } });
+  }
+
   return mapEventSong(data as EventSongRow);
 }
 
@@ -114,11 +123,21 @@ export async function updateEventSong(id: string, patch: UpdateEventSongInput): 
 
   const { error } = await supabase.from("event_songs").update(payload).eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("event_songs", "update", { id, data: payload });
+  }
 }
 
 export async function deleteEventSong(id: string): Promise<void> {
   const { error } = await supabase.from("event_songs").delete().eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("event_songs", "delete", { id });
+  }
 }
 
 export function groupSongsByMoment(songs: EventSong[]): { moment: string; songs: EventSong[] }[] {

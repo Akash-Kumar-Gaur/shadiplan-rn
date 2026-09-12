@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { shadowWrite, useNeonBackend } from "./supabase-dual-write";
 
 export type Gift = {
   id: string;
@@ -58,21 +59,29 @@ export async function fetchGifts(weddingId: string): Promise<Gift[]> {
 }
 
 export async function insertGift(weddingId: string, input: CreateGiftInput): Promise<Gift> {
+  const giftData = {
+    wedding_id: weddingId,
+    guest_id: input.guestId ?? null,
+    giver_name: input.giverName.trim(),
+    amount: input.amount ?? null,
+    gift_description: input.giftDescription?.trim() || null,
+    thank_you_sent: input.thankYouSent ?? false,
+    notes: input.notes?.trim() || null,
+  };
+
   const { data, error } = await supabase
     .from("gifts")
-    .insert({
-      wedding_id: weddingId,
-      guest_id: input.guestId ?? null,
-      giver_name: input.giverName.trim(),
-      amount: input.amount ?? null,
-      gift_description: input.giftDescription?.trim() || null,
-      thank_you_sent: input.thankYouSent ?? false,
-      notes: input.notes?.trim() || null,
-    })
+    .insert(giftData)
     .select()
     .single();
 
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("gifts", "insert", { data: { ...giftData, id: data.id } });
+  }
+
   return mapGift(data as GiftRow);
 }
 
@@ -97,9 +106,19 @@ export async function updateGift(
     .eq("wedding_id", weddingId)
     .eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("gifts", "update", { id, data: payload });
+  }
 }
 
 export async function deleteGift(weddingId: string, id: string): Promise<void> {
   const { error } = await supabase.from("gifts").delete().eq("wedding_id", weddingId).eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("gifts", "delete", { id });
+  }
 }

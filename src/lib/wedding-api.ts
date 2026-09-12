@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { shadowWrite, useNeonBackend } from "./supabase-dual-write";
 
 export type PlanningTask = {
   id: string;
@@ -246,6 +247,23 @@ export async function createWedding(
     .single();
 
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("weddings", "insert", {
+      data: {
+        id: data.id,
+        owner_id: ownerId,
+        couple_names: coupleNames,
+        location: input.location.trim() || null,
+        start_date: startDate,
+        wedding_date: weddingDate,
+        end_date: endDate,
+        total_budget: input.totalBudget ?? null,
+      },
+    });
+  }
+
   return mapWedding(data as WeddingRow);
 }
 
@@ -270,6 +288,11 @@ export async function updateWedding(
   if (!Object.keys(payload).length) return;
   const { error } = await supabase.from("weddings").update(payload).eq("id", weddingId);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("weddings", "update", { id: weddingId, data: payload });
+  }
 }
 
 export type WeddingCollaborator = {
@@ -389,24 +412,32 @@ export async function insertPlanningTask(
   weddingId: string,
   input: Omit<PlanningTask, "id">,
 ): Promise<PlanningTask> {
+  const taskData = {
+    wedding_id: weddingId,
+    task: input.task,
+    lead_time: input.leadTime,
+    category: input.category,
+    commonly_missed: input.commonlyMissed,
+    reason: input.reason ?? null,
+    done: input.done,
+    suggested_date: input.suggestedDate || null,
+    event_time: input.eventTime || null,
+    venue: input.venue || null,
+  };
+
   const { data, error } = await supabase
     .from("planning_tasks")
-    .insert({
-      wedding_id: weddingId,
-      task: input.task,
-      lead_time: input.leadTime,
-      category: input.category,
-      commonly_missed: input.commonlyMissed,
-      reason: input.reason ?? null,
-      done: input.done,
-      suggested_date: input.suggestedDate || null,
-      event_time: input.eventTime || null,
-      venue: input.venue || null,
-    })
+    .insert(taskData)
     .select()
     .single();
 
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("planning_tasks", "insert", { data: { ...taskData, id: data.id } });
+  }
+
   return mapPlanningTask(data as PlanningTaskRow);
 }
 
@@ -439,6 +470,11 @@ export async function deletePlanningTask(weddingId: string, id: string): Promise
     .eq("wedding_id", weddingId)
     .eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("planning_tasks", "delete", { id });
+  }
 }
 
 export async function updatePlanningTask(
@@ -459,6 +495,11 @@ export async function updatePlanningTask(
     .eq("wedding_id", weddingId)
     .eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("planning_tasks", "update", { id, data: payload });
+  }
 }
 
 export async function fetchTimelineEvents(weddingId: string): Promise<TimelineEvent[]> {
@@ -485,21 +526,29 @@ export async function insertTimelineEvent(
   weddingId: string,
   input: CreateTimelineEventInput,
 ): Promise<TimelineEvent> {
+  const eventData = {
+    wedding_id: weddingId,
+    event_date: input.eventDate,
+    event_time: input.time,
+    name: input.name.trim(),
+    venue: input.venue?.trim() || "",
+    dress_code: input.dressCode?.trim() || "",
+    done: false,
+  };
+
   const { data, error } = await supabase
     .from("timeline_events")
-    .insert({
-      wedding_id: weddingId,
-      event_date: input.eventDate,
-      event_time: input.time,
-      name: input.name.trim(),
-      venue: input.venue?.trim() || "",
-      dress_code: input.dressCode?.trim() || "",
-      done: false,
-    })
+    .insert(eventData)
     .select()
     .single();
 
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("timeline_events", "insert", { data: { ...eventData, id: data.id } });
+  }
+
   return {
     id: data.id,
     eventDate: data.event_date,
@@ -524,12 +573,22 @@ export async function updateTimelineEvent(
   if (patch.eventDate !== undefined) payload.event_date = patch.eventDate || null;
   const { error } = await supabase.from("timeline_events").update(payload).eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("timeline_events", "update", { id, data: payload });
+  }
 }
 
 /** Deletes event; event_songs and outfit_plans linked to it CASCADE. */
 export async function deleteTimelineEvent(id: string): Promise<void> {
   const { error } = await supabase.from("timeline_events").delete().eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("timeline_events", "delete", { id });
+  }
 }
 
 export async function fetchPendingSuggestions(weddingId: string): Promise<PendingSuggestion[]> {
@@ -612,9 +671,19 @@ export async function dismissPendingSuggestion(id: string): Promise<void> {
     .update({ status: "dismissed" })
     .eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("pending_suggestions", "update", { id, data: { status: "dismissed" } });
+  }
 }
 
 export async function removePendingSuggestion(id: string): Promise<void> {
   const { error } = await supabase.from("pending_suggestions").delete().eq("id", id);
   if (error) throw error;
+
+  // Shadow write to Supabase
+  if (useNeonBackend) {
+    shadowWrite("pending_suggestions", "delete", { id });
+  }
 }
