@@ -11,7 +11,7 @@ import { AppPressable } from "../AppPressable";
 import { AppSelect } from "../AppSelect";
 import { AppTextInput } from "../AppTextInput";
 import { colors } from "../../theme/tokens";
-import { shortDate } from "../../lib/format";
+import { shortDate, toLocalIsoDate } from "../../lib/format";
 
 type Props = {
   weddingId: string | undefined;
@@ -111,7 +111,7 @@ export const VendorCreateSheet = forwardRef<BottomSheetModal, Props>(function Ve
           phone: phone.trim(),
           totalCost: cost,
           advancePaid: advance,
-          dueDate: dueDate ? dueDate.toISOString().slice(0, 10) : "",
+          dueDate: dueDate ? toLocalIsoDate(dueDate) : "",
           status,
           notes: notes.trim() || undefined
 },
@@ -176,7 +176,7 @@ export const VendorCreateSheet = forwardRef<BottomSheetModal, Props>(function Ve
           <Text style={formStyles.label}>Due date</Text>
           <AppPressable style={formStyles.input} onPress={() => setShowDatePicker(true)}>
             <Text style={{ color: dueDate ? colors.charcoal : colors.textMuted, fontSize: 15 }}>
-              {dueDate ? shortDate(dueDate.toISOString().slice(0, 10)) : "Select date"}
+              {dueDate ? shortDate(toLocalIsoDate(dueDate)) : "Select date"}
             </Text>
           </AppPressable>
           {showDatePicker ? (

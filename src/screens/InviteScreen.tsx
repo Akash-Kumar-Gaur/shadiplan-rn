@@ -27,6 +27,7 @@ import { useTimelineEvents } from "../hooks/use-timeline-events";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
 import { upsertInvite } from "../lib/invite-api";
 import { getCardDimensions } from "../lib/invite-export";
+import { pickInviteImage } from "../lib/invite-images";
 import { buildInviteEventDetails, type InviteThemeId } from "../lib/invite-utils";
 import { dateTabLabel, distinctEventDates } from "../lib/lead-time-dates";
 import { formatDisplayTime } from "../lib/time-utils";
@@ -122,13 +123,16 @@ export function InviteScreen({ navigation, route }: Props) {
     [timelineEvents, selectedIds],
   );
 
+  const inviteImageSeed = guestId ?? groupId;
+
   const cardProps = useMemo(
     () => ({
       coupleNames: wedding?.coupleNames ?? "Couple",
       events: buildInviteEventDetails(selectedEvents),
       location: wedding?.location ?? "",
+      inviteImage: pickInviteImage(inviteImageSeed),
     }),
-    [wedding, selectedEvents],
+    [wedding, selectedEvents, inviteImageSeed],
   );
 
   const cardDimensions = useMemo(

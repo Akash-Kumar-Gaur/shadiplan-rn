@@ -1,6 +1,12 @@
 import { LinearGradient } from "expo-linear-gradient";
 import type { ComponentType } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  type ImageSourcePropType,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import type { InviteEventDetail, InviteThemeId } from "../../lib/invite-utils";
 import { fonts } from "../../theme/tokens";
 
@@ -10,9 +16,23 @@ export interface InviteCardProps {
   coupleNames: string;
   events: InviteEventDetail[];
   location: string;
+  inviteImage?: ImageSourcePropType;
 }
 
 const EVENT_BLOCK_GAP = 22;
+
+function InviteIllustration({ source }: { source?: ImageSourcePropType }) {
+  if (!source) return null;
+  return (
+    <Image
+      source={source}
+      style={styles.inviteImage}
+      resizeMode="contain"
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+    />
+  );
+}
 
 function InviteEventList({
   events,
@@ -48,7 +68,12 @@ function LocationLine({ text, color }: { text: string; color: string }) {
   return <Text style={[styles.location, { color }]}>{text}</Text>;
 }
 
-export function FloralInviteCard({ coupleNames, events, location }: InviteCardProps) {
+export function FloralInviteCard({
+  coupleNames,
+  events,
+  location,
+  inviteImage,
+}: InviteCardProps) {
   return (
     <LinearGradient
       colors={["#FBF7F0", "#F5E6D8", "#E8C4A8"]}
@@ -58,7 +83,10 @@ export function FloralInviteCard({ coupleNames, events, location }: InviteCardPr
       style={styles.card}
     >
       <Text style={[styles.eyebrow, { color: "#8B5E3C" }]}>You're invited</Text>
-      <Text style={[styles.title, { color: "#3D2914", marginTop: 32 }]}>{coupleNames}</Text>
+      <InviteIllustration source={inviteImage} />
+      <Text style={[styles.title, { color: "#3D2914", marginTop: inviteImage ? 16 : 32 }]}>
+        {coupleNames}
+      </Text>
       <View style={[styles.divider, { backgroundColor: "#C17F59" }]} />
       <InviteEventList events={events} nameColor="#5C4033" metaColor="#6F4F3C" />
       <View style={[styles.divider, { backgroundColor: "#C17F59" }]} />
@@ -67,11 +95,19 @@ export function FloralInviteCard({ coupleNames, events, location }: InviteCardPr
   );
 }
 
-export function MinimalInviteCard({ coupleNames, events, location }: InviteCardProps) {
+export function MinimalInviteCard({
+  coupleNames,
+  events,
+  location,
+  inviteImage,
+}: InviteCardProps) {
   return (
     <View style={[styles.card, { backgroundColor: "#FBF7F0" }]}>
       <Text style={[styles.eyebrowTight, { color: "#9A8B7A" }]}>Wedding invitation</Text>
-      <Text style={[styles.title, { color: "#2C2418", marginTop: 48 }]}>{coupleNames}</Text>
+      <InviteIllustration source={inviteImage} />
+      <Text style={[styles.title, { color: "#2C2418", marginTop: inviteImage ? 24 : 48 }]}>
+        {coupleNames}
+      </Text>
       <View style={{ marginTop: 40 }}>
         <InviteEventList events={events} nameColor="#5C5348" metaColor="#6E6256" />
       </View>
@@ -82,7 +118,12 @@ export function MinimalInviteCard({ coupleNames, events, location }: InviteCardP
   );
 }
 
-export function RoyalInviteCard({ coupleNames, events, location }: InviteCardProps) {
+export function RoyalInviteCard({
+  coupleNames,
+  events,
+  location,
+  inviteImage,
+}: InviteCardProps) {
   return (
     <LinearGradient
       colors={["#4A0E1A", "#2D0810", "#1A0508"]}
@@ -93,7 +134,13 @@ export function RoyalInviteCard({ coupleNames, events, location }: InviteCardPro
     >
       <View style={styles.royalInner}>
         <Text style={[styles.eyebrowTight, { color: "#D4AF37" }]}>Shubh Vivah</Text>
-        <Text style={[styles.titleSemibold, { color: "#F5E6C8", marginTop: 32 }]}>
+        <InviteIllustration source={inviteImage} />
+        <Text
+          style={[
+            styles.titleSemibold,
+            { color: "#F5E6C8", marginTop: inviteImage ? 16 : 32 },
+          ]}
+        >
           {coupleNames}
         </Text>
         <LinearGradient
@@ -115,7 +162,12 @@ export function RoyalInviteCard({ coupleNames, events, location }: InviteCardPro
   );
 }
 
-export function PastelInviteCard({ coupleNames, events, location }: InviteCardProps) {
+export function PastelInviteCard({
+  coupleNames,
+  events,
+  location,
+  inviteImage,
+}: InviteCardProps) {
   return (
     <LinearGradient
       colors={["#FDF2F8", "#F3E8FF", "#EDE9FE"]}
@@ -126,11 +178,16 @@ export function PastelInviteCard({ coupleNames, events, location }: InviteCardPr
     >
       <View style={styles.pastelInner}>
         <Text style={[styles.eyebrowLight, { color: "#9B7BB8" }]}>Save the date</Text>
-        <Text style={[styles.title, { color: "#4A3F55", marginTop: 32, fontWeight: "400" }]}>
+        <InviteIllustration source={inviteImage} />
+        <Text
+          style={[
+            styles.title,
+            { color: "#4A3F55", marginTop: inviteImage ? 16 : 32, fontWeight: "400" },
+          ]}
+        >
           {coupleNames}
         </Text>
         <View style={{ marginTop: 40 }}>
-          {/* High-contrast meta colors — Pastel legibility fix from web */}
           <InviteEventList events={events} nameColor="#6B5B73" metaColor="#7E6E86" />
         </View>
         <View style={{ marginTop: 40 }}>
@@ -181,6 +238,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 64,
+  },
+  inviteImage: {
+    width: "58%",
+    maxHeight: 320,
+    aspectRatio: 1,
+    marginTop: 12,
+    marginBottom: 4,
   },
   royalInner: {
     flex: 1,

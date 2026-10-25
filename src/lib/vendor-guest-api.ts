@@ -1,3 +1,4 @@
+import { toLocalIsoDate } from "./format";
 import { supabase } from "./supabase";
 import type {
   BudgetCategory,
@@ -55,6 +56,7 @@ function asVendorStatus(value: string): VendorStatus {
 }
 
 function mapVendor(row: VendorRow, payments: PaymentRow[]): Vendor {
+  const paymentSum = payments.reduce((sum, p) => sum + Number(p.amount), 0);
   return {
     id: row.id,
     name: row.name,
@@ -62,7 +64,7 @@ function mapVendor(row: VendorRow, payments: PaymentRow[]): Vendor {
     contactName: row.contact_name ?? "",
     phone: row.phone ?? "",
     totalCost: Number(row.total_cost),
-    advancePaid: Number(row.advance_paid),
+    advancePaid: payments.length ? paymentSum : Number(row.advance_paid),
     dueDate: row.due_date ?? "",
     status: asVendorStatus(row.status),
     notes: row.notes ?? undefined,
@@ -73,6 +75,32 @@ function mapVendor(row: VendorRow, payments: PaymentRow[]): Vendor {
       note: p.note ?? undefined,
     })),
   };
+}
+
+export async function syncVendorAdvanceFromPayments(vendorId: string): Promise<number> {
+  const { data: vendor, error: vendorError } = await supabase
+    .from("vendors")
+    .select("total_cost")
+    .eq("id", vendorId)
+    .single();
+  if (vendorError) throw vendorError;
+
+  const { data: payments, error: payError } = await supabase
+    .from("vendor_payments")
+    .select("amount")
+    .eq("vendor_id", vendorId);
+  if (payError) throw payError;
+
+  const advancePaid = (payments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
+  const totalCost = Number(vendor.total_cost);
+  const status = advancePaid >= totalCost ? "Paid" : advancePaid > 0 ? "Confirmed" : "Pending";
+
+  const { error } = await supabase
+    .from("vendors")
+    .update({ advance_paid: advancePaid, status })
+    .eq("id", vendorId);
+  if (error) throw error;
+  return advancePaid;
 }
 
 export async function fetchVendors(weddingId: string): Promise<Vendor[]> {
@@ -128,7 +156,7 @@ export async function recordVendorPayment(
   amount: number,
   paidDate: string,
   note?: string,
-): Promise<void> {
+): Promise<number> {
   const { data: payment, error: paymentError } = await supabase
     .from("vendor_payments")
     .insert({
@@ -154,15 +182,7 @@ export async function recordVendorPayment(
   });
   if (txError) throw txError;
 
-  const newAdvance = vendor.advancePaid + amount;
-  const { error: vendorError } = await supabase
-    .from("vendors")
-    .update({
-      advance_paid: newAdvance,
-      status: newAdvance >= vendor.totalCost ? "Paid" : "Confirmed",
-    })
-    .eq("id", vendor.id);
-  if (vendorError) throw vendorError;
+  return syncVendorAdvanceFromPayments(vendor.id);
 }
 
 export async function insertVendor(
@@ -196,7 +216,7 @@ export async function insertVendor(
       budgetCategories.find((c) => c.name === input.category)?.id ??
       budgetCategories[0]?.id;
     if (categoryId) {
-      const paidDate = new Date().toISOString().slice(0, 10);
+      const paidDate = toLocalIsoDate();
       await recordVendorPayment(weddingId, vendor, categoryId, input.advancePaid, paidDate);
       const refreshed = await fetchVendors(weddingId);
       vendor = refreshed.find((v) => v.id === vendor.id) ?? vendor;
@@ -214,7 +234,25 @@ export async function updateVendor(
   vendorId: string,
   input: UpdateVendorInput,
 ): Promise<Vendor> {
-  const advance = Math.min(Math.max(0, input.advancePaid), input.totalCost);
+  const { data: existingPayments, error: existingPayError } = await supabase
+    .from("vendor_payments")
+    .select("id, amount")
+    .eq("vendor_id", vendorId);
+  if (existingPayError) throw existingPayError;
+
+  const hasPayments = (existingPayments ?? []).length > 0;
+  const paymentSum = (existingPayments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
+  const advance = hasPayments
+    ? paymentSum
+    : Math.min(Math.max(0, input.advancePaid), input.totalCost);
+  const status = hasPayments
+    ? advance >= input.totalCost
+      ? "Paid"
+      : input.status === "Paid"
+        ? "Confirmed"
+        : input.status
+    : input.status;
+
   const { data, error } = await supabase
     .from("vendors")
     .update({
@@ -225,7 +263,7 @@ export async function updateVendor(
       total_cost: input.totalCost,
       advance_paid: advance,
       due_date: input.dueDate || null,
-      status: input.status,
+      status,
       notes: input.notes?.trim() || null,
     })
     .eq("wedding_id", weddingId)

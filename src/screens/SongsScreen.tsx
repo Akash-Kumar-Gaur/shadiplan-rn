@@ -296,8 +296,9 @@ const SongFormSheet = forwardRef<
       setLink("");
     }
     setError(null);
-    // Only reacts to `song` identity; `events` default is only used when creating.
-  }, [song]);
+    // Seed once per song id — list refetches must not wipe mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song?.id]);
 
   const formValues = useMemo(
     () => ({

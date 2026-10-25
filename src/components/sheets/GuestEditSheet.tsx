@@ -67,7 +67,9 @@ export const GuestEditSheet = forwardRef<BottomSheetModal, Props>(function Guest
     setNotes(guest.notes ?? "");
     setRemoveConfirmOpen(false);
     setError(null);
-  }, [guest, guestGroups]);
+    // Seed once per guest id — group list refetches must not wipe mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guest?.id]);
 
   const formValues = useMemo(
     () => ({

@@ -106,7 +106,7 @@ android {
         applicationId 'in.redevolve.shadiplan'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
+        versionCode 6
         versionName "1.0.1"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
@@ -138,7 +138,8 @@ android {
         }
         release {
             // Play Store uploads must be release-signed — do not fall back to debug.
-            if (hasReleaseSigning) {
+            // EAS local/cloud builds inject storeFile via eas-build-inject-android-credentials.gradle.
+            if (hasReleaseSigning || signingConfigs.release.storeFile != null) {
                 signingConfig signingConfigs.release
             }
             minifyEnabled true
@@ -213,10 +214,13 @@ gradle.taskGraph.whenReady { graph ->
         def n = task.name.toLowerCase()
         n.contains("release") && (n.contains("bundle") || n.contains("assemble") || n.contains("package"))
     }
-    if (!releaseTasks.isEmpty() && !hasReleaseSigning) {
+    // Accept env/file signing OR EAS-injected credentials (credentials.json → storeFile).
+    def releaseStoreFile = android.signingConfigs.findByName("release")?.storeFile
+    if (!releaseTasks.isEmpty() && releaseStoreFile == null) {
         throw new GradleException(
             "Release signing is not configured. Set KEYSTORE_PATH, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD " +
-            "(see .env.release.example) or create android/keystore.properties (gitignored)."
+            "(see .env.release.example), create android/keystore.properties (gitignored), " +
+            "or build with EAS credentials (eas build / eas build --local)."
         )
     }
 }

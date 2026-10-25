@@ -19,6 +19,7 @@ import {
   updateVendor,
 } from "../lib/vendor-guest-api";
 import { cancelVendorReminder, scheduleVendorReminder } from "../lib/vendor-reminders";
+import { toLocalIsoDate } from "../lib/format";
 import { weddingQueryKeys } from "../lib/wedding-query-keys";
 import type { BudgetCategory } from "../types/wedding";
 
@@ -104,7 +105,7 @@ export function useMarkVendorPaid(weddingId: string | undefined) {
         budgetCategories.find((c) => c.name === vendor.category)?.id ??
         budgetCategories[0]?.id;
       if (!categoryId) throw new Error("No budget category available");
-      const today = new Date().toISOString().slice(0, 10);
+      const today = toLocalIsoDate();
       await recordVendorPayment(weddingId, vendor, categoryId, balance, today);
       await cancelVendorReminder(vendor.id);
     },
@@ -141,8 +142,14 @@ export function useAddVendorPayment(weddingId: string | undefined) {
         budgetCategories.find((c) => c.name === vendor.category)?.id ??
         budgetCategories[0]?.id;
       if (!categoryId) throw new Error("No budget category available");
-      await recordVendorPayment(weddingId, vendor, categoryId, amount, paidDate, note);
-      const newAdvance = vendor.advancePaid + amount;
+      const newAdvance = await recordVendorPayment(
+        weddingId,
+        vendor,
+        categoryId,
+        amount,
+        paidDate,
+        note,
+      );
       if (newAdvance >= vendor.totalCost) {
         await cancelVendorReminder(vendor.id);
       }

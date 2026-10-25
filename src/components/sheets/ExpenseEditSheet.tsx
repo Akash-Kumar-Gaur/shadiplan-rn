@@ -6,7 +6,7 @@ import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useDeleteExpense, useUpdateExpense } from "../../hooks/use-wallet-mutations";
 import type { BudgetCategory, Transaction } from "../../types/wedding";
 import { EXPENSE_TAG_PRESETS } from "../../types/wedding";
-import { shortDate } from "../../lib/format";
+import { parseLocalDate, shortDate, toLocalIsoDate } from "../../lib/format";
 import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
 import { requestAppConfirm, showAppAlert } from "../ConfirmSheet";
@@ -48,13 +48,15 @@ export const ExpenseEditSheet = forwardRef<BottomSheetModal, Props>(function Exp
     setAmount(String(transaction.amount));
     setCategoryId(transaction.categoryId || budgetCategories[0]?.id || "");
     setVendorName(transaction.vendorName);
-    setPaidDate(new Date(`${transaction.date}T12:00:00`));
+    setPaidDate(parseLocalDate(transaction.date));
     setShowDatePicker(false);
     setNote(transaction.note ?? "");
     setTaggedFor(transaction.taggedFor ?? []);
     setCustomTag("");
     setError(null);
-  }, [transaction, budgetCategories]);
+    // Seed once per transaction id — parent refetches must not wipe mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transaction?.id]);
 
   const formValues = useMemo(
     () => ({
@@ -69,19 +71,18 @@ export const ExpenseEditSheet = forwardRef<BottomSheetModal, Props>(function Exp
     [amount, categoryId, vendorName, paidDate, note, taggedFor, customTag],
   );
 
+  const baselineCategoryId = transaction?.categoryId || budgetCategories[0]?.id || "";
   const baseline = useMemo(
     () => ({
       amount: transaction ? String(transaction.amount) : "",
-      categoryId: transaction?.categoryId || budgetCategories[0]?.id || "",
+      categoryId: baselineCategoryId,
       vendorName: transaction?.vendorName ?? "",
-      paidDate: transaction
-        ? new Date(`${transaction.date}T12:00:00`)
-        : new Date(),
+      paidDate: transaction ? parseLocalDate(transaction.date) : new Date(),
       note: transaction?.note ?? "",
       taggedFor: transaction?.taggedFor ?? [],
       customTag: "",
     }),
-    [transaction, budgetCategories],
+    [transaction, baselineCategoryId],
   );
 
   const isDirty = useFormDirty(formValues, baseline);
@@ -120,7 +121,7 @@ export const ExpenseEditSheet = forwardRef<BottomSheetModal, Props>(function Exp
           amount: parsed,
           categoryId,
           vendorName: vendorLinked ? undefined : vendorName.trim() || undefined,
-          date: paidDate.toISOString().slice(0, 10),
+          date: toLocalIsoDate(paidDate),
           note: note.trim() || undefined,
           taggedFor
 }
@@ -248,7 +249,7 @@ export const ExpenseEditSheet = forwardRef<BottomSheetModal, Props>(function Exp
         <Text style={formStyles.label}>Date</Text>
         <AppPressable style={formStyles.input} onPress={() => setShowDatePicker(true)}>
           <Text style={{ color: colors.charcoal, fontSize: 15 }}>
-            {shortDate(paidDate.toISOString().slice(0, 10))}
+            {shortDate(toLocalIsoDate(paidDate))}
           </Text>
         </AppPressable>
         {showDatePicker ? (

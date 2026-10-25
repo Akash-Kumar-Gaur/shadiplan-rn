@@ -5,7 +5,7 @@ import { ActivityIndicator, Platform, Text, View } from "react-native";
 import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useDeleteTimelineEvent, useUpdateTimelineEvent } from "../../hooks/use-checklist-mutations";
 import type { TimelineEvent } from "../../lib/wedding-api";
-import { shortDate } from "../../lib/format";
+import { parseLocalDate, shortDate, toLocalIsoDate } from "../../lib/format";
 import { normalizeTimeForStorage } from "../../lib/time-utils";
 import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
@@ -19,18 +19,6 @@ type Props = {
   weddingId: string | undefined;
   onClose: () => void;
 };
-
-function parseIsoDate(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function toIsoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 export const TimelineEditSheet = forwardRef<BottomSheetModal, Props>(function TimelineEditSheet(
   { event, weddingId, onClose },
@@ -59,7 +47,9 @@ export const TimelineEditSheet = forwardRef<BottomSheetModal, Props>(function Ti
     setDressCode(event.dressCode ?? "");
     setError(null);
     setShowDatePicker(false);
-  }, [event]);
+    // Seed once per event id — timeline refetches must not wipe mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event?.id]);
 
   const formValues = useMemo(
     () => ({ name, eventDate, time, venue, dressCode }),
@@ -152,12 +142,12 @@ export const TimelineEditSheet = forwardRef<BottomSheetModal, Props>(function Ti
         </AppPressable>
         {showDatePicker ? (
           <DateTimePicker
-            value={eventDate ? parseIsoDate(eventDate) : new Date()}
+              value={eventDate ? parseLocalDate(eventDate) : new Date()}
             mode="date"
             display={Platform.OS === "ios" ? "spinner" : "default"}
             onChange={(_e, date) => {
               if (Platform.OS !== "ios") setShowDatePicker(false);
-              if (date) setEventDate(toIsoDate(date));
+              if (date) setEventDate(toLocalIsoDate(date));
             }}
           />
         ) : null}

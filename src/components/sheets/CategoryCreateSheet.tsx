@@ -42,7 +42,9 @@ export const CategoryFormSheet = forwardRef<BottomSheetModal, Props>(function Ca
       setPlanned("");
     }
     setError(null);
-  }, [category]);
+    // Seed once per category id (or create mode) — refetches must not wipe mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category?.id]);
 
   const reset = () => {
     if (!category) {

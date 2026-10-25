@@ -126,11 +126,7 @@ export function WalletScreen() {
     if (selectedTransaction) expenseEditRef.current?.present();
   }, [selectedTransaction]);
 
-  useEffect(() => {
-    if (!selectedTransaction) return;
-    const fresh = transactions.find((t) => t.id === selectedTransaction.id);
-    if (fresh && fresh !== selectedTransaction) setSelectedTransaction(fresh);
-  }, [transactions, selectedTransaction]);
+  // Do not hot-swap selectedTransaction on query refetch — that remounts/resets the edit form.
 
   const openExpense = useCallback(() => expenseRef.current?.present(), []);
   const closeExpenseEdit = useCallback(() => setSelectedTransaction(null), []);

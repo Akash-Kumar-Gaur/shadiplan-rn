@@ -277,7 +277,9 @@ const GiftFormSheet = forwardRef<
       setThankYouSent(false);
     }
     setError(null);
-  }, [gift]);
+    // Seed once per gift id — list refetches must not wipe mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gift?.id]);
 
   const reset = () => {
     if (!gift) {

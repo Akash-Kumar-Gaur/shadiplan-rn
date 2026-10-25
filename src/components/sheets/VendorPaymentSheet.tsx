@@ -4,7 +4,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { ActivityIndicator, Platform, Text, View } from "react-native";
 import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useAddVendorPayment } from "../../hooks/use-vendor-guest-mutations";
-import { shortDate } from "../../lib/format";
+import { shortDate, toLocalIsoDate } from "../../lib/format";
 import type { BudgetCategory, Vendor } from "../../types/wedding";
 import { colors, fonts } from "../../theme/tokens";
 import { AmountText } from "../AmountText";
@@ -43,12 +43,14 @@ export const VendorPaymentSheet = forwardRef<BottomSheetModal, Props>(function V
     setShowDatePicker(false);
     setNote("");
     setError(null);
-  }, [vendor, balance]);
+    // Seed once per vendor id — balance updates must not wipe mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendor?.id]);
 
   const formValues = useMemo(
     () => ({
       amount,
-      paidDate: paidDate.toISOString().slice(0, 10),
+      paidDate: toLocalIsoDate(paidDate),
       note,
     }),
     [amount, paidDate, note],
@@ -57,7 +59,7 @@ export const VendorPaymentSheet = forwardRef<BottomSheetModal, Props>(function V
   const baseline = useMemo(
     () => ({
       amount: balance > 0 ? String(balance) : "",
-      paidDate: new Date().toISOString().slice(0, 10),
+      paidDate: toLocalIsoDate(),
       note: "",
     }),
     [balance],
@@ -78,7 +80,7 @@ export const VendorPaymentSheet = forwardRef<BottomSheetModal, Props>(function V
         vendor,
         budgetCategories,
         amount: parsed,
-        paidDate: paidDate.toISOString().slice(0, 10),
+        paidDate: toLocalIsoDate(paidDate),
         note: note.trim() || undefined,
       });
       innerRef.current?.dismiss();
@@ -88,13 +90,11 @@ export const VendorPaymentSheet = forwardRef<BottomSheetModal, Props>(function V
     }
   };
 
-  if (!vendor) return null;
-
   return (
     <AppBottomSheet
       ref={innerRef}
       title="Add payment"
-      subtitle={vendor.name}
+      subtitle={vendor?.name}
       isDirty={isDirty}
       onDismiss={onClose}
     >
@@ -118,7 +118,7 @@ export const VendorPaymentSheet = forwardRef<BottomSheetModal, Props>(function V
         <Text style={formStyles.label}>Date</Text>
         <AppPressable style={formStyles.input} onPress={() => setShowDatePicker(true)}>
           <Text style={{ color: colors.charcoal, fontSize: 15 }}>
-            {shortDate(paidDate.toISOString().slice(0, 10))}
+            {shortDate(toLocalIsoDate(paidDate))}
           </Text>
         </AppPressable>
         {showDatePicker ? (

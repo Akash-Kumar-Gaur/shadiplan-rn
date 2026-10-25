@@ -10,7 +10,7 @@ import {
   Utensils,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Keyboard, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Vendor, VendorCandidate, VendorCategory } from "../types/wedding";
 import { useBudgetCategories, useVendors } from "../hooks/use-vendor-guest-queries";
@@ -76,6 +76,8 @@ export function VendorsScreen() {
   const paymentRef = useRef<BottomSheetModal>(null);
   const candidateCreateRef = useRef<BottomSheetModal>(null);
   const candidateDetailRef = useRef<BottomSheetModal>(null);
+  /** True while the payment sheet is (or is about to be) open — keep selectedVendor. */
+  const paymentOpenRef = useRef(false);
 
   useEffect(() => {
     if (vendorsLoading || vendors.length === 0) return;
@@ -117,32 +119,33 @@ export function VendorsScreen() {
     if (selectedVendor) detailRef.current?.present();
   }, [selectedVendor]);
 
-  useEffect(() => {
-    if (!selectedVendor) return;
-    const fresh = vendors.find((v) => v.id === selectedVendor.id);
-    if (fresh && fresh !== selectedVendor) setSelectedVendor(fresh);
-  }, [vendors, selectedVendor]);
+  // Do not hot-swap selected vendor/candidate on refetch — resets the open edit form.
 
   useEffect(() => {
     if (selectedCandidate) candidateDetailRef.current?.present();
   }, [selectedCandidate]);
 
-  useEffect(() => {
-    if (!selectedCandidate) return;
-    const fresh = candidates.find((c) => c.id === selectedCandidate.id);
-    if (fresh && fresh !== selectedCandidate) setSelectedCandidate(fresh);
-  }, [candidates, selectedCandidate]);
-
   const openCreate = useCallback(() => {
     if (mode === "shortlist") candidateCreateRef.current?.present();
     else createRef.current?.present();
   }, [mode]);
-  const closeDetail = useCallback(() => setSelectedVendor(null), []);
+  const closeDetail = useCallback(() => {
+    if (paymentOpenRef.current) return;
+    setSelectedVendor(null);
+  }, []);
   const closeCandidateDetail = useCallback(() => setSelectedCandidate(null), []);
   const openAddPayment = useCallback(() => {
+    paymentOpenRef.current = true;
+    Keyboard.dismiss();
+    // Force-dismiss so AppBottomSheet dirty/keyboard guards don't re-present detail
+    // and immediately replace the payment sheet.
+    detailRef.current?.dismiss();
     requestAnimationFrame(() => paymentRef.current?.present());
   }, []);
-  const closePayment = useCallback(() => {}, []);
+  const closePayment = useCallback(() => {
+    paymentOpenRef.current = false;
+    requestAnimationFrame(() => detailRef.current?.present());
+  }, []);
 
   const loading = weddingLoading || vendorsLoading || (mode === "shortlist" && candidatesLoading);
 

@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "reac
 import { ActivityIndicator, Platform, Text, View } from "react-native";
 import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useCreatePlanningTask } from "../../hooks/use-checklist-mutations";
-import { shortDate } from "../../lib/format";
+import { parseLocalDate, shortDate, toLocalIsoDate } from "../../lib/format";
 import {
   PLANNING_TASK_CATEGORIES,
   type PlanningTaskCategory
@@ -21,18 +21,6 @@ type Props = {
   defaultDate?: string;
   onCreated?: () => void;
 };
-
-function parseIsoDate(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function toIsoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 export const PlanningTaskCreateSheet = forwardRef<BottomSheetModal, Props>(
   function PlanningTaskCreateSheet(
@@ -143,12 +131,12 @@ export const PlanningTaskCreateSheet = forwardRef<BottomSheetModal, Props>(
           </AppPressable>
           {showDatePicker ? (
             <DateTimePicker
-              value={suggestedDate ? parseIsoDate(suggestedDate) : new Date()}
+              value={suggestedDate ? parseLocalDate(suggestedDate) : new Date()}
               mode="date"
               display={Platform.OS === "ios" ? "spinner" : "default"}
               onChange={(_e, date) => {
                 if (Platform.OS !== "ios") setShowDatePicker(false);
-                if (date) setSuggestedDate(toIsoDate(date));
+                if (date) setSuggestedDate(toLocalIsoDate(date));
               }}
             />
           ) : null}

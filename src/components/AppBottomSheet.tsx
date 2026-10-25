@@ -1,6 +1,8 @@
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
+  SCROLLABLE_TYPE,
+  createBottomSheetScrollableComponent,
   type BottomSheetBackdropProps,
   type BottomSheetModalProps,
 } from "@gorhom/bottom-sheet";
@@ -17,14 +19,17 @@ import {
 } from "react";
 import {
   BackHandler,
+  Dimensions,
+  Keyboard,
+  Platform,
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import { ScrollView } from "react-native-gesture-handler";
+import { X } from "lucide-react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useConfirmedDismiss } from "../hooks/use-confirmed-dismiss";
 import { colors, fonts, radius } from "../theme/tokens";
@@ -32,6 +37,22 @@ import { AppPressable } from "./AppPressable";
 
 /** Approximate height of the sheet handle / grabber area. */
 const HANDLE_AREA = 28;
+
+/**
+ * Freeze to screen height — NOT window height.
+ * With adjustResize, window height shrinks when the keyboard opens and
+ * recalculating snap points remounts form inputs mid-typing.
+ */
+const SHEET_HEIGHT = Math.round(Dimensions.get("screen").height * 0.75);
+
+/**
+ * KeyboardAwareScrollView wired into gorhom's scrollable system so sheet
+ * gestures + scroll-to-focused-input both work.
+ */
+const BottomSheetKeyboardAwareScrollView = createBottomSheetScrollableComponent(
+  SCROLLABLE_TYPE.SCROLLVIEW,
+  KeyboardAwareScrollView,
+) as unknown as typeof KeyboardAwareScrollView;
 
 type AppBottomSheetProps = {
   title: string;
@@ -56,17 +77,19 @@ export function SheetFormBody({
   contentContainerStyle?: StyleProp<ViewStyle>;
 }) {
   return (
-    <ScrollView
+    <BottomSheetKeyboardAwareScrollView
+      enableOnAndroid
+      extraScrollHeight={24}
+      keyboardOpeningTime={0}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
       showsVerticalScrollIndicator
       bounces
-      nestedScrollEnabled
       style={styles.scroll}
       contentContainerStyle={contentContainerStyle}
     >
       {children}
-    </ScrollView>
+    </BottomSheetKeyboardAwareScrollView>
   );
 }
 
@@ -76,15 +99,13 @@ export function SheetFormBody({
  *
  * IMPORTANT: enableContentPanningGesture is OFF so vertical pans go to the
  * ScrollView (gorhom otherwise steals them and the body never scrolls).
- * Dismiss still works via the handle / backdrop / Android back.
+ * Dismiss works via the close icon, handle, backdrop, or Android back.
  */
 export const AppBottomSheet = forwardRef<BottomSheetModal, AppBottomSheetProps>(
   function AppBottomSheet({ title, subtitle, children, onDismiss, isDirty = false }, ref) {
     const insets = useSafeAreaInsets();
-    const { height: windowHeight } = useWindowDimensions();
-    const sheetHeight = useMemo(() => Math.round(windowHeight * 0.75), [windowHeight]);
-    const snapPoints = useMemo(() => [sheetHeight], [sheetHeight]);
-    const bodyHeight = sheetHeight - HANDLE_AREA;
+    const snapPoints = useMemo(() => [SHEET_HEIGHT], []);
+    const bodyHeight = SHEET_HEIGHT - HANDLE_AREA;
 
     const sheetRef = useRef<BottomSheetModal>(null);
     const [isOpen, setIsOpen] = useState(false);
@@ -133,6 +154,15 @@ export const AppBottomSheet = forwardRef<BottomSheetModal, AppBottomSheetProps>(
     const handleDismiss = useCallback(() => {
       const wasForced = allowCloseRef.current;
       allowCloseRef.current = false;
+
+      // Keyboard can push the sheet to an invalid detent (index -1) on Android.
+      // Reopen without resetting form state.
+      if (!wasForced && Keyboard.isVisible()) {
+        requestAnimationFrame(() => {
+          sheetRef.current?.present();
+        });
+        return;
+      }
 
       if (isDirty && !wasForced) {
         requestAnimationFrame(() => {
@@ -187,29 +217,52 @@ export const AppBottomSheet = forwardRef<BottomSheetModal, AppBottomSheetProps>(
         onChange={handleChange}
         backgroundStyle={styles.background}
         handleIndicatorStyle={styles.handle}
-        keyboardBehavior="interactive"
+        keyboardBehavior={Platform.OS === "ios" ? "interactive" : "extend"}
         keyboardBlurBehavior="restore"
-        android_keyboardInputMode="adjustResize"
+        android_keyboardInputMode="adjustPan"
         enableBlurKeyboardOnGesture
       >
         <View style={[styles.sheetBody, { height: bodyHeight }]}>
-          <ScrollView
+          <View style={styles.header}>
+            <View style={styles.headerText}>
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
+              </Text>
+              {subtitle ? (
+                <Text style={styles.subtitle} numberOfLines={1}>
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
+            <AppPressable
+              onPress={attemptDismiss}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={8}
+              style={styles.closeBtn}
+            >
+              <X size={18} color={colors.mutedForeground} />
+            </AppPressable>
+          </View>
+          <BottomSheetKeyboardAwareScrollView
             style={styles.scroll}
             contentContainerStyle={{
-              paddingTop: 4,
+              paddingTop: 8,
               paddingHorizontal: 20,
-              paddingBottom: insets.bottom + (showConfirm ? 160 : 56),
+              paddingBottom: insets.bottom + (showConfirm ? 160 : 80),
             }}
+            enableOnAndroid
+            extraScrollHeight={40}
+            extraHeight={24}
+            keyboardOpeningTime={0}
+            enableAutomaticScroll
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator
             bounces
-            nestedScrollEnabled
           >
-            <Text style={styles.title}>{title}</Text>
-            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
             <View style={styles.content}>{children}</View>
-          </ScrollView>
+          </BottomSheetKeyboardAwareScrollView>
 
           {showConfirm ? (
             <View
@@ -427,11 +480,30 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
+  header: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.secondary,
+  },
   title: {
     fontFamily: fonts.headingMedium,
     fontSize: 22,
     color: colors.foreground,
-    marginBottom: 4,
   },
   subtitle: {
     fontFamily: fonts.body,
@@ -439,10 +511,9 @@ const styles = StyleSheet.create({
     color: colors.mutedForeground,
     textTransform: "uppercase",
     letterSpacing: 1,
-    marginBottom: 8,
+    marginTop: 2,
   },
   content: {
-    marginTop: 12,
     paddingBottom: 8,
   },
 });

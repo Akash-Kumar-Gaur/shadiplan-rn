@@ -10,7 +10,7 @@ import type {
   VendorStatus
 } from "../../types/wedding";
 import { VENDOR_CATEGORIES } from "../../types/wedding";
-import { formatDate, shortDate } from "../../lib/format";
+import { formatDate, parseLocalDate, shortDate, toLocalIsoDate } from "../../lib/format";
 import { useFormDirty } from "../../hooks/use-form-dirty";
 import {
   useDeleteVendor,
@@ -34,7 +34,7 @@ type Props = {
 
 function parseDueDate(value: string | null): Date | null {
   if (!value) return null;
-  const d = new Date(`${value}T12:00:00`);
+  const d = parseLocalDate(value);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -76,7 +76,9 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
     setRemoveConfirmOpen(false);
     setError(null);
     setShowDatePicker(false);
-  }, [vendor]);
+    // Seed once per vendor id — list refetches must not wipe mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendor?.id]);
 
   const formValues = useMemo(
     () => ({
@@ -110,7 +112,12 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
 
   const isDirty = useFormDirty(formValues, baseline);
 
-  const balance = vendor ? vendor.totalCost - vendor.advancePaid : 0;
+  const paidFromPayments = vendor
+    ? vendor.payments.reduce((sum, payment) => sum + payment.amount, 0)
+    : 0;
+  const hasPayments = (vendor?.payments.length ?? 0) > 0;
+  const displayPaid = hasPayments ? paidFromPayments : vendor?.advancePaid ?? 0;
+  const balance = vendor ? vendor.totalCost - displayPaid : 0;
 
   const handleSave = async () => {
     if (!vendor) return;
@@ -123,7 +130,7 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
       setError("Enter a valid total cost");
       return;
     }
-    const advance = Number(advancePaid) || 0;
+    const advance = hasPayments ? paidFromPayments : Number(advancePaid) || 0;
     if (advance < 0 || advance > cost) {
       setError("Advance paid must be between 0 and total cost");
       return;
@@ -140,7 +147,7 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
           phone: phone.trim(),
           totalCost: cost,
           advancePaid: advance,
-          dueDate: dueDate ? dueDate.toISOString().slice(0, 10) : "",
+          dueDate: dueDate ? toLocalIsoDate(dueDate) : "",
           status,
           notes: notes.trim() || undefined
 }
@@ -192,12 +199,12 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
       <View style={styles.summaryCard}>
         <View style={styles.stats}>
           <Stat label="Total" value={vendor.totalCost} />
-          <Stat label="Paid" value={vendor.advancePaid} />
+          <Stat label="Paid" value={displayPaid} />
           <Stat label="Balance" value={balance} />
         </View>
         <Text style={styles.runningTotal}>
           Running total:{" "}
-          <AmountText value={vendor.advancePaid} style={styles.runningTotalEm} />
+          <AmountText value={displayPaid} style={styles.runningTotalEm} />
           {" of "}
           <AmountText value={vendor.totalCost} style={styles.runningTotalEm} />
         </Text>
@@ -208,7 +215,7 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
               {
                 width: `${
                   vendor.totalCost > 0
-                    ? Math.min(100, Math.round((vendor.advancePaid / vendor.totalCost) * 100))
+                    ? Math.min(100, Math.round((displayPaid / vendor.totalCost) * 100))
                     : 0
                 }%`,
               },
@@ -282,13 +289,26 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
           keyboardType="numeric"
           containerStyle={formStyles.row2col}
         />
-        <AppTextInput
-          label="Advance paid (₹)"
-          value={advancePaid}
-          onChangeText={setAdvancePaid}
-          keyboardType="numeric"
-          containerStyle={formStyles.row2col}
-        />
+        {hasPayments ? (
+          <View style={[formStyles.field, formStyles.row2col]}>
+            <Text style={formStyles.label}>Advance paid (₹)</Text>
+            <View style={[formStyles.input, { opacity: 0.75 }]}>
+              <AmountText
+                value={paidFromPayments}
+                style={{ fontSize: 15, color: colors.charcoal, fontFamily: fonts.body }}
+              />
+            </View>
+            <Text style={styles.syncedHint}>Synced from payment records</Text>
+          </View>
+        ) : (
+          <AppTextInput
+            label="Advance paid (₹)"
+            value={advancePaid}
+            onChangeText={setAdvancePaid}
+            keyboardType="numeric"
+            containerStyle={formStyles.row2col}
+          />
+        )}
       </View>
 
       <View style={formStyles.row2}>
@@ -296,7 +316,7 @@ export const VendorDetailSheet = forwardRef<BottomSheetModal, Props>(function Ve
           <Text style={formStyles.label}>Due date</Text>
           <AppPressable style={formStyles.input} onPress={() => setShowDatePicker(true)}>
             <Text style={{ color: dueDate ? colors.charcoal : colors.textMuted, fontSize: 15 }}>
-              {dueDate ? shortDate(dueDate.toISOString().slice(0, 10)) : "Select date"}
+              {dueDate ? shortDate(toLocalIsoDate(dueDate)) : "Select date"}
             </Text>
           </AppPressable>
           {showDatePicker ? (
@@ -462,6 +482,12 @@ const styles = StyleSheet.create({
   stat: {
     flex: 1
 },
+  syncedHint: {
+    marginTop: 4,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: colors.mutedForeground,
+  },
   statLabel: {
     fontFamily: fonts.body,
     fontSize: 11,

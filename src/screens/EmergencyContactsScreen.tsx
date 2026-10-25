@@ -204,7 +204,9 @@ const ContactFormSheet = forwardRef<
       setNotes("");
     }
     setError(null);
-  }, [contact]);
+    // Seed once per contact id — list refetches must not wipe mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contact?.id]);
 
   const reset = () => {
     if (!contact) {

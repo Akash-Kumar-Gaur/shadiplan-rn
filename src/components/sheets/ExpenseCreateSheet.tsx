@@ -6,7 +6,7 @@ import { useFormDirty } from "../../hooks/use-form-dirty";
 import { useCreateBudgetCategory, useCreateExpense } from "../../hooks/use-wallet-mutations";
 import type { BudgetCategory } from "../../types/wedding";
 import { EXPENSE_TAG_PRESETS, NEW_CATEGORY_VALUE } from "../../types/wedding";
-import { shortDate } from "../../lib/format";
+import { shortDate, toLocalIsoDate } from "../../lib/format";
 import { AppBottomSheet, formStyles } from "../AppBottomSheet";
 import { AppPressable } from "../AppPressable";
 import { AppSelect } from "../AppSelect";
@@ -53,12 +53,22 @@ export const ExpenseCreateSheet = forwardRef<BottomSheetModal, Props>(function E
     setError(null);
   };
 
+  // Only seed category when the list of ids changes — keep selection stable across refetches.
+  const categoryIdsKey = budgetCategories.map((c) => c.id).join(",");
   useEffect(() => {
-    if (budgetCategories.length === 0) setCategoryId(NEW_CATEGORY_VALUE);
-    else if (!categoryId || categoryId === NEW_CATEGORY_VALUE) {
-      setCategoryId(budgetCategories[0]?.id ?? NEW_CATEGORY_VALUE);
+    if (budgetCategories.length === 0) {
+      setCategoryId(NEW_CATEGORY_VALUE);
+      return;
     }
-  }, [budgetCategories]);
+    setCategoryId((prev) => {
+      if (prev && prev !== NEW_CATEGORY_VALUE && budgetCategories.some((c) => c.id === prev)) {
+        return prev;
+      }
+      return budgetCategories[0]?.id ?? NEW_CATEGORY_VALUE;
+    });
+    // budgetCategories is derived from categoryIdsKey; listing it keeps the setState updater fresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by categoryIdsKey
+  }, [categoryIdsKey]);
 
   const formValues = useMemo(
     () => ({
@@ -66,7 +76,7 @@ export const ExpenseCreateSheet = forwardRef<BottomSheetModal, Props>(function E
       categoryId,
       newCategoryName,
       vendorName,
-      paidDate: paidDate.toISOString().slice(0, 10),
+      paidDate: toLocalIsoDate(paidDate),
       note,
       taggedFor,
       customTag,
@@ -74,18 +84,19 @@ export const ExpenseCreateSheet = forwardRef<BottomSheetModal, Props>(function E
     [amount, categoryId, newCategoryName, vendorName, paidDate, note, taggedFor, customTag],
   );
 
+  const defaultCategoryId = budgetCategories[0]?.id ?? NEW_CATEGORY_VALUE;
   const baseline = useMemo(
     () => ({
       amount: "",
-      categoryId: budgetCategories[0]?.id ?? NEW_CATEGORY_VALUE,
+      categoryId: defaultCategoryId,
       newCategoryName: "",
       vendorName: "",
-      paidDate: new Date().toISOString().slice(0, 10),
+      paidDate: toLocalIsoDate(),
       note: "",
       taggedFor: [] as string[],
       customTag: "",
     }),
-    [budgetCategories],
+    [defaultCategoryId],
   );
 
   const isDirty = useFormDirty(formValues, baseline);
@@ -132,7 +143,7 @@ export const ExpenseCreateSheet = forwardRef<BottomSheetModal, Props>(function E
         amount: parsed,
         categoryId: resolvedCategoryId,
         vendorName: vendorName.trim() || undefined,
-        date: paidDate.toISOString().slice(0, 10),
+        date: toLocalIsoDate(paidDate),
         note: note.trim() || undefined,
         taggedFor: taggedFor.length ? taggedFor : undefined
 });
@@ -239,7 +250,7 @@ export const ExpenseCreateSheet = forwardRef<BottomSheetModal, Props>(function E
         <Text style={formStyles.label}>Date</Text>
         <AppPressable style={formStyles.input} onPress={() => setShowDatePicker(true)}>
           <Text style={{ color: colors.charcoal, fontSize: 15 }}>
-            {shortDate(paidDate.toISOString().slice(0, 10))}
+            {shortDate(toLocalIsoDate(paidDate))}
           </Text>
         </AppPressable>
         {showDatePicker ? (

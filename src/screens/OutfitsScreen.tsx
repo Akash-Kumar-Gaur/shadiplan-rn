@@ -320,7 +320,9 @@ const OutfitEditSheet = forwardRef<
     setDesigner(target.existing?.jewellerOrDesigner ?? "");
     setNotes(target.existing?.notes ?? "");
     setError(null);
-  }, [target]);
+    // Seed once per event+person target — plan refetches must not wipe mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.event.id, target?.person, target?.existing?.id]);
 
   const formValues = useMemo(
     () => ({ description, color, designer, notes }),

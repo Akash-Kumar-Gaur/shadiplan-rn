@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { shadowWrite, useNeonBackend } from "./supabase-dual-write";
+import { syncVendorAdvanceFromPayments } from "./vendor-guest-api";
 import type {
   BudgetCategory,
   CreateExpenseInput,
@@ -160,31 +161,6 @@ export async function insertTransaction(
   }
 
   return mapTransaction(data as TransactionRow);
-}
-
-async function syncVendorAdvanceFromPayments(vendorId: string): Promise<void> {
-  const { data: vendor, error: vendorError } = await supabase
-    .from("vendors")
-    .select("total_cost")
-    .eq("id", vendorId)
-    .single();
-  if (vendorError) throw vendorError;
-
-  const { data: payments, error: payError } = await supabase
-    .from("vendor_payments")
-    .select("amount")
-    .eq("vendor_id", vendorId);
-  if (payError) throw payError;
-
-  const advancePaid = (payments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
-  const totalCost = Number(vendor.total_cost);
-  const status = advancePaid >= totalCost ? "Paid" : advancePaid > 0 ? "Confirmed" : "Pending";
-
-  const { error } = await supabase
-    .from("vendors")
-    .update({ advance_paid: advancePaid, status })
-    .eq("id", vendorId);
-  if (error) throw error;
 }
 
 export async function updateTransaction(

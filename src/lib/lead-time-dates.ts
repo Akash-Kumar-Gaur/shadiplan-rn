@@ -1,4 +1,5 @@
 import type { LeadTime } from "../data/suggestion-pool";
+import { parseLocalDate, toLocalIsoDate } from "./format";
 import type { TimelineEvent } from "./wedding-api";
 import { parseTimeToMinutes } from "./time-utils";
 
@@ -11,51 +12,39 @@ const LEAD_MONTHS: Record<LeadTime, number> = {
   "1wk": 0,
 };
 
-function parseDateOnly(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function formatDateOnly(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 export function suggestedDateFromLeadTime(weddingDate: string, leadTime: string): string {
-  const base = parseDateOnly(weddingDate);
+  const base = parseLocalDate(weddingDate);
   if (leadTime === "1wk") {
     base.setDate(base.getDate() - 7);
-    return formatDateOnly(base);
+    return toLocalIsoDate(base);
   }
   const months = LEAD_MONTHS[leadTime as LeadTime] ?? 3;
   base.setMonth(base.getMonth() - months);
-  return formatDateOnly(base);
+  return toLocalIsoDate(base);
 }
 
 export function formatShortDate(iso: string): string {
   if (!iso) return "";
-  const d = parseDateOnly(iso);
+  const d = parseLocalDate(iso);
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
 export function formatLongDate(iso: string): string {
   if (!iso) return "";
-  const d = parseDateOnly(iso);
+  const d = parseLocalDate(iso);
   return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 }
 
 export function datesInRange(startDate: string, endDate: string): string[] {
   if (!startDate || !endDate) return [];
-  const start = parseDateOnly(startDate);
-  const end = parseDateOnly(endDate);
-  if (end.getTime() < start.getTime()) return [formatDateOnly(start)];
+  const start = parseLocalDate(startDate);
+  const end = parseLocalDate(endDate);
+  if (end.getTime() < start.getTime()) return [toLocalIsoDate(start)];
 
   const dates: string[] = [];
   const cursor = new Date(start);
   while (cursor.getTime() <= end.getTime()) {
-    dates.push(formatDateOnly(cursor));
+    dates.push(toLocalIsoDate(cursor));
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
@@ -66,7 +55,7 @@ export function distinctEventDates(events: TimelineEvent[]): string[] {
   for (const e of events) {
     if (e.eventDate) dates.add(e.eventDate);
   }
-  return [...dates].sort((a, b) => parseDateOnly(a).getTime() - parseDateOnly(b).getTime());
+  return [...dates].sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
 }
 
 export function groupEventsByDate(events: TimelineEvent[]): Map<string, TimelineEvent[]> {
@@ -96,5 +85,5 @@ export function timelineDayDates(
   const range = datesInRange(startDate, endDate);
   const extra = distinctEventDates(events);
   const set = new Set([...range, ...extra]);
-  return [...set].sort((a, b) => parseDateOnly(a).getTime() - parseDateOnly(b).getTime());
+  return [...set].sort((a, b) => parseLocalDate(a).getTime() - parseLocalDate(b).getTime());
 }

@@ -8,6 +8,11 @@ import {
   mergeTransactionSources,
 } from "../lib/wallet-api";
 import { weddingQueryKeys } from "../lib/wedding-query-keys";
+import type { BudgetCategory, Transaction, Vendor } from "../types/wedding";
+
+const EMPTY_CATEGORIES: BudgetCategory[] = [];
+const EMPTY_TRANSACTIONS: Transaction[] = [];
+const EMPTY_VENDORS: Vendor[] = [];
 
 export function useTransactions(weddingId: string | undefined) {
   return useQuery({
@@ -30,9 +35,9 @@ export function useWalletData(weddingId: string | undefined) {
     enabled: !!weddingId,
   });
 
-  const budgetCategoriesRaw = categoriesQuery.data ?? [];
-  const dbTransactions = transactionsQuery.data ?? [];
-  const vendors = vendorsQuery.data ?? [];
+  const budgetCategoriesRaw = categoriesQuery.data ?? EMPTY_CATEGORIES;
+  const dbTransactions = transactionsQuery.data ?? EMPTY_TRANSACTIONS;
+  const vendors = vendorsQuery.data ?? EMPTY_VENDORS;
 
   const transactions = useMemo(
     () => mergeTransactionSources(dbTransactions, vendors, budgetCategoriesRaw),

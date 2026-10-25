@@ -1,5 +1,14 @@
 import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
-import { forwardRef, type ComponentProps, type ComponentRef, type Ref } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ComponentRef,
+  type Ref,
+} from "react";
 import {
   StyleSheet,
   Text,
@@ -27,8 +36,11 @@ export type AppTextInputProps = Omit<SheetInputProps & NativeInputProps, "style"
 };
 
 /**
- * Shared branded text field. Defaults to BottomSheetTextInput so focus scrolls
- * correctly inside AppBottomSheet forms. Pass `native` for screen-level inputs.
+ * Shared branded text field.
+ *
+ * Keeps a local buffer while focused so parent re-renders (keyboard layout,
+ * dirty-checks, query updates) cannot wipe or drop characters mid-typing.
+ * Pass `native` for screen-level inputs outside a bottom sheet.
  */
 export const AppTextInput = forwardRef(function AppTextInput(
   {
@@ -39,10 +51,49 @@ export const AppTextInput = forwardRef(function AppTextInput(
     style,
     multiline,
     native = false,
+    onFocus,
+    onBlur,
     ...props
   }: AppTextInputProps,
   ref: Ref<ComponentRef<typeof BottomSheetTextInput> | TextInput>,
 ) {
+  const [text, setText] = useState(value ?? "");
+  const focusedRef = useRef(false);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setText(value ?? "");
+    }
+  }, [value]);
+
+  const handleChangeText = useCallback(
+    (next: string) => {
+      setText(next);
+      onChangeText?.(next);
+    },
+    [onChangeText],
+  );
+
+  const handleFocus = useCallback(
+    (e: Parameters<NonNullable<NativeInputProps["onFocus"]>>[0]) => {
+      focusedRef.current = true;
+      onFocus?.(e as never);
+    },
+    [onFocus],
+  );
+
+  const handleBlur = useCallback(
+    (e: Parameters<NonNullable<NativeInputProps["onBlur"]>>[0]) => {
+      focusedRef.current = false;
+      // Pick up external resets (form clear) that happened while focused.
+      setText(valueRef.current ?? "");
+      onBlur?.(e as never);
+    },
+    [onBlur],
+  );
+
   const inputStyle = [multiline ? styles.textarea : styles.input, style];
 
   return (
@@ -51,22 +102,26 @@ export const AppTextInput = forwardRef(function AppTextInput(
       {native ? (
         <TextInput
           ref={ref as Ref<TextInput>}
+          {...(props as NativeInputProps)}
           style={inputStyle}
-          value={value}
-          onChangeText={onChangeText}
+          value={text}
+          onChangeText={handleChangeText}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           placeholderTextColor={colors.textMuted}
           multiline={multiline}
-          {...(props as NativeInputProps)}
         />
       ) : (
         <BottomSheetTextInput
           ref={ref as Ref<ComponentRef<typeof BottomSheetTextInput>>}
+          {...(props as SheetInputProps)}
           style={inputStyle}
-          value={value}
-          onChangeText={onChangeText}
+          value={text}
+          onChangeText={handleChangeText}
+          onFocus={handleFocus as SheetInputProps["onFocus"]}
+          onBlur={handleBlur as SheetInputProps["onBlur"]}
           placeholderTextColor={colors.textMuted}
           multiline={multiline}
-          {...(props as SheetInputProps)}
         />
       )}
     </View>

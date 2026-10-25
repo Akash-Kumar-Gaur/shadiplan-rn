@@ -21,8 +21,8 @@
     },
     "android": {
       "package": "in.redevolve.shadiplan",
-      "versionCode": 2,
-      "softwareKeyboardLayoutMode": "resize",
+      "versionCode": 6,
+      "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FBF7F0"

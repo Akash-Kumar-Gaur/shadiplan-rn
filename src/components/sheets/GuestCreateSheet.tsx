@@ -58,10 +58,20 @@ export const GuestCreateSheet = forwardRef<BottomSheetModal, Props>(function Gue
     setError(null);
   };
 
+  const groupIdsKey = guestGroups.map((g) => g.id).join(",");
   useEffect(() => {
-    if (guestGroups.length === 0) setGroupId(NEW_GROUP_VALUE);
-    else if (!groupId || groupId === NEW_GROUP_VALUE) setGroupId(guestGroups[0]?.id ?? NEW_GROUP_VALUE);
-  }, [guestGroups]);
+    if (guestGroups.length === 0) {
+      setGroupId(NEW_GROUP_VALUE);
+      return;
+    }
+    setGroupId((prev) => {
+      if (prev && prev !== NEW_GROUP_VALUE && guestGroups.some((g) => g.id === prev)) {
+        return prev;
+      }
+      return guestGroups[0]?.id ?? NEW_GROUP_VALUE;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by groupIdsKey
+  }, [groupIdsKey]);
 
   const formValues = useMemo(
     () => ({

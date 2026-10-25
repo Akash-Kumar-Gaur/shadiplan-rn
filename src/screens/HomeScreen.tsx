@@ -34,7 +34,7 @@ import { useWalletData } from "../hooks/use-wallet-queries";
 import { useTimelineEvents } from "../hooks/use-timeline-events";
 import { useWeddingMeta } from "../hooks/use-wedding-meta";
 import { computeGuestHeadcounts } from "../lib/guest-headcount";
-import { formatDate } from "../lib/format";
+import { formatDate, toLocalIsoDate } from "../lib/format";
 import { AmountText } from "../components/AmountText";
 import { formatShortDate } from "../lib/lead-time-dates";
 import { daysUntil, daysUntilWedding, isWeddingPast } from "../lib/wedding-dates";
@@ -102,7 +102,7 @@ export function HomeScreen() {
   const budgetSheetRef = useRef<BottomSheetModal>(null);
   const addEventRef = useRef<BottomSheetModal>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toLocalIsoDate();
 
   const upcomingEvents = useMemo(() => {
     const sorted = sortTimelineEvents(timelineEvents);

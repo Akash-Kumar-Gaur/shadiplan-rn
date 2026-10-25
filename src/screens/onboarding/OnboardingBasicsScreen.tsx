@@ -9,23 +9,8 @@ import { AppPressable } from "../../components/AppPressable";
 import { AppTextInput } from "../../components/AppTextInput";
 import { formStyles } from "../../components/AppBottomSheet";
 import type { OnboardingStackParamList } from "../../navigation/types";
+import { formatDate, parseLocalDate, toLocalIsoDate } from "../../lib/format";
 import { colors, fonts, radius, spacing } from "../../theme/tokens";
-
-function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-function formatDisplay(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }).format(new Date(`${iso}T12:00:00`));
-  } catch {
-    return iso;
-  }
-}
 
 export function OnboardingBasicsScreen() {
   const insets = useSafeAreaInsets();
@@ -38,13 +23,13 @@ export function OnboardingBasicsScreen() {
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() + 6);
-    return toIsoDate(d);
+    return toLocalIsoDate(d);
   });
   const [endDate, setEndDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() + 6);
     d.setDate(d.getDate() + 2);
-    return toIsoDate(d);
+    return toLocalIsoDate(d);
   });
   const [budget, setBudget] = useState("");
   const [picking, setPicking] = useState<"start" | "end" | null>(null);
@@ -128,25 +113,25 @@ export function OnboardingBasicsScreen() {
           <View style={[formStyles.field, formStyles.row2col]}>
             <Text style={formStyles.label}>Start date *</Text>
             <AppPressable style={formStyles.input} onPress={() => setPicking("start")}>
-              <Text style={styles.dateText}>{formatDisplay(startDate)}</Text>
+              <Text style={styles.dateText}>{formatDate(startDate)}</Text>
             </AppPressable>
           </View>
           <View style={[formStyles.field, formStyles.row2col]}>
             <Text style={formStyles.label}>End date *</Text>
             <AppPressable style={formStyles.input} onPress={() => setPicking("end")}>
-              <Text style={styles.dateText}>{formatDisplay(endDate)}</Text>
+              <Text style={styles.dateText}>{formatDate(endDate)}</Text>
             </AppPressable>
           </View>
         </View>
 
         {picking ? (
           <DateTimePicker
-            value={new Date(`${(picking === "start" ? startDate : endDate)}T12:00:00`)}
+            value={parseLocalDate(picking === "start" ? startDate : endDate)}
             mode="date"
             onChange={(_, date) => {
               if (Platform.OS !== "ios") setPicking(null);
               if (!date) return;
-              const iso = toIsoDate(date);
+              const iso = toLocalIsoDate(date);
               if (picking === "start") {
                 setStartDate(iso);
                 if (endDate < iso) setEndDate(iso);
